@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: catequese-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGODB_URI
+        sync: false          # define manualmente no painel do Render (secreto)
+      - key: DB_NAME
+        value: catequese
+      - key: JWT_SECRET
+        sync: false          # define manualmente no painel do Render (secreto)
+      - key: ENVIRONMENT
+        value: production
+      - key: CORS_ORIGINS
+        value: "*"           # trocar pelo domínio do Flutter Web quando existir
