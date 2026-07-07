@@ -217,7 +217,7 @@ class _SectoresScreenState extends State<SectoresScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Sectores da Paróquia')),
+      appBar: AppBar(title: const Text('Sectores da Comunidade')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _erro != null

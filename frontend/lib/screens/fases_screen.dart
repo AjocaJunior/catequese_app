@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/catequista.dart';
 import '../models/fase.dart';
+import '../models/sector.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/catequista_service.dart';
@@ -54,68 +55,90 @@ class _FasesScreenState extends State<FasesScreen> {
   Future<void> _mostrarFormulario({Fase? fase}) async {
     final nomeController = TextEditingController(text: fase?.nome ?? '');
     final catecismoController = TextEditingController(text: fase?.nomeCatecismo ?? '');
+    final horaController = TextEditingController(text: fase?.hora ?? '');
     final localController = TextEditingController(text: fase?.local ?? '');
     final programaController = TextEditingController(text: fase?.programaPdfUrl ?? '');
+    DiaSemana? diaSemana = fase?.diaSemana;
     final formKey = GlobalKey<FormState>();
 
     final confirmar = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(fase == null ? 'Nova fase' : 'Editar fase'),
-        content: SizedBox(
-          width: 420,
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nomeController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Nome da fase',
-                    hintText: 'Ex: 1º Ano, Crisma, Pré-Catequese...',
-                  ),
-                  validator: (v) => (v == null || v.trim().length < 2) ? 'Nome demasiado curto' : null,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) => AlertDialog(
+          title: Text(fase == null ? 'Nova fase' : 'Editar fase'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: nomeController,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Nome da fase',
+                        hintText: 'Ex: 1º Ano, Crisma, Pré-Catequese...',
+                      ),
+                      validator: (v) => (v == null || v.trim().length < 2) ? 'Nome demasiado curto' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: catecismoController,
+                      decoration: const InputDecoration(
+                        labelText: 'Catecismo (opcional)',
+                        hintText: 'Ex: Jesus Entre Nós',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<DiaSemana?>(
+                      value: diaSemana,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Dia da semana (opcional)'),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('Não definido')),
+                        ...DiaSemana.values.map((d) => DropdownMenuItem(value: d, child: Text(d.rotulo))),
+                      ],
+                      onChanged: (v) => setStateDialog(() => diaSemana = v),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: horaController,
+                      decoration: const InputDecoration(labelText: 'Hora (opcional)', hintText: 'Ex: 08H30'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: localController,
+                      decoration: const InputDecoration(
+                        labelText: 'Local (opcional)',
+                        hintText: 'Ex: Sala 1',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: programaController,
+                      decoration: const InputDecoration(
+                        labelText: 'Link do programa em PDF (opcional)',
+                        hintText: 'Link do Google Drive',
+                      ),
+                      keyboardType: TextInputType.url,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: catecismoController,
-                  decoration: const InputDecoration(
-                    labelText: 'Catecismo (opcional)',
-                    hintText: 'Ex: Jesus Entre Nós',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: localController,
-                  decoration: const InputDecoration(
-                    labelText: 'Local (opcional)',
-                    hintText: 'Ex: Sala 1',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: programaController,
-                  decoration: const InputDecoration(
-                    labelText: 'Link do programa em PDF (opcional)',
-                    hintText: 'Link do Google Drive',
-                  ),
-                  keyboardType: TextInputType.url,
-                ),
-              ],
+              ),
             ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) Navigator.pop(context, true);
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) Navigator.pop(context, true);
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
       ),
     );
 
@@ -126,6 +149,8 @@ class _FasesScreenState extends State<FasesScreen> {
         await _service.criar(
           nomeController.text.trim(),
           nomeCatecismo: catecismoController.text.trim(),
+          diaSemana: diaSemana,
+          hora: horaController.text.trim().isEmpty ? null : horaController.text.trim(),
           local: localController.text.trim(),
           programaPdfUrl: programaController.text.trim(),
         );
@@ -134,6 +159,8 @@ class _FasesScreenState extends State<FasesScreen> {
           fase.id,
           nome: nomeController.text.trim(),
           nomeCatecismo: catecismoController.text.trim(),
+          diaSemana: diaSemana,
+          hora: horaController.text.trim().isEmpty ? null : horaController.text.trim(),
           local: localController.text.trim(),
           programaPdfUrl: programaController.text.trim(),
         );
@@ -282,6 +309,8 @@ class _FasesScreenState extends State<FasesScreen> {
                             final fase = _fases[i];
                             final nomesCatequistas = fase.catequistas.map((c) => c.nome).join(', ');
                             final detalhes = [
+                              if (fase.diaSemana != null)
+                                '${fase.diaSemana!.rotulo}${fase.hora != null ? ', ${fase.hora}' : ''}',
                               if (fase.nomeCatecismo != null && fase.nomeCatecismo!.isNotEmpty)
                                 'Catecismo: ${fase.nomeCatecismo}',
                               if (fase.local != null && fase.local!.isNotEmpty) 'Local: ${fase.local}',

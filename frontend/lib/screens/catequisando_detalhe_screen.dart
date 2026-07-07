@@ -3,6 +3,7 @@ import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 import '../models/catequisando.dart';
+import '../models/historico_inscricao.dart';
 import '../models/presenca.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
@@ -23,6 +24,7 @@ class CatequisandoDetalheScreen extends StatefulWidget {
 class _CatequisandoDetalheScreenState extends State<CatequisandoDetalheScreen> {
   late Catequisando _catequisando;
   HistoricoPresencas? _historico;
+  List<HistoricoInscricao> _historicoInscricoes = [];
   bool _carregandoHistorico = true;
   bool _imprimindo = false;
   bool _editando = false;
@@ -45,9 +47,11 @@ class _CatequisandoDetalheScreenState extends State<CatequisandoDetalheScreen> {
     final token = context.read<AuthService>().token;
     try {
       final historico = await PresencaService(token).historico(_catequisando.id);
+      final historicoInscricoes = await CatequisandoService(token).historico(_catequisando.id);
       if (!mounted) return;
       setState(() {
         _historico = historico;
+        _historicoInscricoes = historicoInscricoes;
         _erro = null;
       });
     } catch (e) {
@@ -147,6 +151,21 @@ class _CatequisandoDetalheScreenState extends State<CatequisandoDetalheScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 20),
+            const Text('Inscrições e Renovações por Ano', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            if (_carregandoHistorico)
+              const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator()))
+            else if (_historicoInscricoes.isEmpty)
+              const Text('Ainda não há inscrição ou renovação registada.')
+            else
+              ..._historicoInscricoes.map((h) => ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(child: Text('${h.anoLetivo ?? '—'}', style: const TextStyle(fontSize: 12))),
+                    title: Text(h.faseNome),
+                    subtitle: Text('${h.categoria} · ${_formatarData(h.data)}'),
+                  )),
             const SizedBox(height: 20),
             const Text('Presenças', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),

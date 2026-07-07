@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
 from pymongo import ReturnDocument
 
 from app.core.database import get_database
-from app.core.deps import get_current_admin
+from app.core.deps import get_current_admin, get_current_catequista
 from app.core.mongo_utils import object_id_or_404
 from app.models.catequista import CatequistaOut
+from app.services.pdf_lista_catequistas import gerar_pdf_lista_catequistas
 
 router = APIRouter(prefix="/catequistas", tags=["catequistas"])
 
@@ -20,6 +21,7 @@ def _to_out(doc: dict) -> CatequistaOut:
         id=str(doc["_id"]),
         nome=doc["nome"],
         email=doc["email"],
+        contacto=doc.get("contacto"),
         is_admin=doc.get("is_admin", False),
         criado_em=doc["criado_em"],
     )
@@ -32,6 +34,38 @@ async def listar_catequistas(
 ):
     cursor = db.catequistas.find().sort("nome", 1)
     return [_to_out(doc) async for doc in cursor]
+
+
+@router.get("/pdf")
+async def gerar_pdf(
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    _: CatequistaOut = Depends(get_current_catequista),
+):
+    """Lista de catequistas, uma linha por catequista/fase, pronta a imprimir."""
+    catequistas_por_id = {}
+    async for c in db.catequistas.find():
+        catequistas_por_id[str(c["_id"])] = {"nome": c["nome"], "contacto": c.get("contacto")}
+
+    fases_com_catequistas = []
+    async for fase in db.fases.find().sort("ordem", 1):
+        catequistas_da_fase = [
+            catequistas_por_id[cid] for cid in fase.get("catequista_ids", []) if cid in catequistas_por_id
+        ]
+        fases_com_catequistas.append({
+            "ordem": fase["ordem"],
+            "nome": fase["nome"],
+            "dia_semana": fase.get("dia_semana"),
+            "hora": fase.get("hora"),
+            "local": fase.get("local"),
+            "catequistas": sorted(catequistas_da_fase, key=lambda c: c["nome"]),
+        })
+
+    pdf_bytes = gerar_pdf_lista_catequistas(fases_com_catequistas)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="lista_catequistas.pdf"'},
+    )
 
 
 @router.patch("/{catequista_id}/admin", response_model=CatequistaOut)

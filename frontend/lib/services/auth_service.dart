@@ -114,6 +114,80 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Atualiza nome e/ou contacto do próprio perfil. Devolve null em sucesso.
+  Future<String?> atualizarPerfil({String? nome, String? contacto}) async {
+    try {
+      final uri = Uri.parse('${ApiConfig.baseUrl}/auth/perfil');
+      final response = await http.put(
+        uri,
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $_token'},
+        body: jsonEncode({
+          if (nome != null) 'nome': nome,
+          if (contacto != null) 'contacto': contacto,
+        }),
+      );
+      if (response.statusCode == 200) {
+        _catequista = Catequista.fromJson(jsonDecode(response.body));
+        notifyListeners();
+        return null;
+      }
+      return _extractError(response.body) ?? 'Não foi possível atualizar o perfil';
+    } catch (e) {
+      return 'Erro de ligação ao servidor: $e';
+    }
+  }
+
+  /// Altera a palavra-passe do utilizador com sessão iniciada.
+  /// Devolve null em caso de sucesso, ou a mensagem de erro em caso de falha.
+  Future<String?> alterarSenha(String senhaAtual, String novaSenha) async {
+    try {
+      final uri = Uri.parse('${ApiConfig.baseUrl}/auth/senha');
+      final response = await http.put(
+        uri,
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $_token'},
+        body: jsonEncode({'senha_atual': senhaAtual, 'nova_senha': novaSenha}),
+      );
+      if (response.statusCode == 204) return null;
+      return _extractError(response.body) ?? 'Não foi possível alterar a palavra-passe';
+    } catch (e) {
+      return 'Erro de ligação ao servidor: $e';
+    }
+  }
+
+  /// Pede o envio do código de recuperação por email.
+  /// Devolve null em caso de sucesso (independentemente de o email existir
+  /// ou não — o backend responde sempre de forma genérica por segurança).
+  Future<String?> esqueciSenha(String email) async {
+    try {
+      final uri = Uri.parse('${ApiConfig.baseUrl}/auth/esqueci-senha');
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      );
+      if (response.statusCode == 200) return null;
+      return _extractError(response.body) ?? 'Não foi possível enviar o código';
+    } catch (e) {
+      return 'Erro de ligação ao servidor: $e';
+    }
+  }
+
+  /// Confirma o código recebido por email e define a nova palavra-passe.
+  Future<String?> redefinirSenha(String email, String codigo, String novaSenha) async {
+    try {
+      final uri = Uri.parse('${ApiConfig.baseUrl}/auth/redefinir-senha');
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'codigo': codigo, 'nova_senha': novaSenha}),
+      );
+      if (response.statusCode == 204) return null;
+      return _extractError(response.body) ?? 'Não foi possível redefinir a palavra-passe';
+    } catch (e) {
+      return 'Erro de ligação ao servidor: $e';
+    }
+  }
+
   String? _extractError(String body) {
     try {
       final data = jsonDecode(body);

@@ -45,7 +45,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (ok) {
       // Login automático feito dentro de register(); volta ao AuthGate,
       // que já vai mostrar o HomeScreen porque isAuthenticated passa a true.
-      Navigator.of(context).pop();
+      // popUntil (em vez de só pop) garante que também sai do ecrã de
+      // login por baixo, não só deste ecrã de registo.
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(auth.lastError ?? 'Erro ao registar')),

@@ -1,4 +1,5 @@
 import '../models/fase.dart';
+import '../models/sector.dart';
 import 'api_client.dart';
 
 class FaseService {
@@ -14,6 +15,8 @@ class FaseService {
     String nome, {
     int? ordem,
     String? nomeCatecismo,
+    DiaSemana? diaSemana,
+    String? hora,
     String? local,
     String? programaPdfUrl,
   }) async {
@@ -21,6 +24,8 @@ class FaseService {
       'nome': nome,
       if (ordem != null) 'ordem': ordem,
       if (nomeCatecismo != null) 'nome_catecismo': nomeCatecismo,
+      if (diaSemana != null) 'dia_semana': diaSemana.valor,
+      if (hora != null) 'hora': hora,
       if (local != null) 'local': local,
       if (programaPdfUrl != null) 'programa_pdf_url': programaPdfUrl,
     });
@@ -32,6 +37,8 @@ class FaseService {
     String? nome,
     int? ordem,
     String? nomeCatecismo,
+    DiaSemana? diaSemana,
+    String? hora,
     String? local,
     String? programaPdfUrl,
   }) async {
@@ -39,6 +46,8 @@ class FaseService {
     if (nome != null) body['nome'] = nome;
     if (ordem != null) body['ordem'] = ordem;
     if (nomeCatecismo != null) body['nome_catecismo'] = nomeCatecismo;
+    if (diaSemana != null) body['dia_semana'] = diaSemana.valor;
+    if (hora != null) body['hora'] = hora;
     if (local != null) body['local'] = local;
     if (programaPdfUrl != null) body['programa_pdf_url'] = programaPdfUrl;
     final data = await _client.put('/fases/$id', body);

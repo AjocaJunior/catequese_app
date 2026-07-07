@@ -6,11 +6,13 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Respon
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from openpyxl import load_workbook
 from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from app.core.database import get_database
 from app.core.deps import get_current_admin, get_current_catequista
 from app.core.mongo_utils import object_id_or_404
 from app.core.permissoes import garantir_acesso_fase
+from app.models.caixa import CATEGORIAS_MATRICULA
 from app.models.catequista import CatequistaOut
 from app.models.catequisando import (
     CatequisandoCreate,
@@ -41,6 +43,24 @@ async def _sector_nome_ou_erro(db: AsyncIOMotorDatabase, sector_id: str) -> str:
     return sector["nome"]
 
 
+def _normalizar_nome(nome: str) -> str:
+    return " ".join(nome.strip().lower().split())
+
+
+async def _garantir_nome_unico(db: AsyncIOMotorDatabase, nome: str, ignorar_id: str | None = None) -> None:
+    filtro = {"nome_normalizado": _normalizar_nome(nome)}
+    if ignorar_id:
+        filtro["_id"] = {"$ne": ObjectId(ignorar_id)}
+    existente = await db.catequisandos.find_one(filtro)
+    if existente is not None:
+        fase_existente = await db.fases.find_one({"_id": object_id_or_404(existente["fase_id"])})
+        nome_fase = fase_existente["nome"] if fase_existente else "fase desconhecida"
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Já existe um catequisando registado com o nome '{nome.strip()}' (na {nome_fase})",
+        )
+
+
 def _to_out(doc: dict, fase_nome: str, sector_nome: str | None = None) -> CatequisandoOut:
     data_nasc = doc.get("data_nascimento")
     return CatequisandoOut(
@@ -67,15 +87,24 @@ async def criar_catequisando(
 ):
     fase_nome = await _fase_nome_ou_erro(db, dados.fase_id)
     sector_nome = await _sector_nome_ou_erro(db, dados.sector_id) if dados.sector_id else None
+    await _garantir_nome_unico(db, dados.nome)
 
     doc = dados.model_dump()
     doc["nome"] = doc["nome"].strip()
+    doc["nome_normalizado"] = _normalizar_nome(doc["nome"])
     doc["criado_em"] = datetime.now(timezone.utc)
     if doc.get("data_nascimento") is not None:
         doc["data_nascimento"] = datetime.combine(doc["data_nascimento"], datetime.min.time())
 
-    result = await db.catequisandos.insert_one(doc)
+    try:
+        result = await db.catequisandos.insert_one(doc)
+    except DuplicateKeyError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Já existe um catequisando registado com o nome '{doc['nome']}'",
+        )
     doc["_id"] = result.inserted_id
+
     return _to_out(doc, fase_nome, sector_nome)
 
 
@@ -213,8 +242,14 @@ async def importar_catequisandos(
         contacto = str(telefone).strip() if telefone not in (None, "") else None
         parentesco = str(linha[3]).strip() if len(linha) > 3 and linha[3] not in (None, "") else None
 
+        nome_normalizado = _normalizar_nome(nome)
+        if await db.catequisandos.find_one({"nome_normalizado": nome_normalizado}):
+            erros.append(ErroImportacao(linha=indice, motivo=f"Já existe um catequisando com o nome '{nome}'"))
+            continue
+
         doc = {
             "nome": nome,
+            "nome_normalizado": nome_normalizado,
             "fase_id": fase_id,
             "sector_id": None,
             "data_nascimento": datetime.combine(data_nascimento, datetime.min.time()) if data_nascimento else None,
@@ -224,7 +259,7 @@ async def importar_catequisandos(
             "observacoes": None,
             "criado_em": datetime.now(timezone.utc),
         }
-        await db.catequisandos.insert_one(doc)
+        result = await db.catequisandos.insert_one(doc)
         criados += 1
 
     return ImportacaoResultado(total_linhas=total, criados=criados, erros=erros)
@@ -248,6 +283,36 @@ async def obter_catequisando(
         sector_nome = sector["nome"] if sector else None
 
     return _to_out(doc, fase["nome"] if fase else "Fase desconhecida", sector_nome)
+
+
+@router.get("/{catequisando_id}/historico")
+async def historico_inscricoes(
+    catequisando_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    _: CatequistaOut = Depends(get_current_catequista),
+):
+    """Histórico de fase por ano letivo, derivado das inscrições/renovações
+    registadas na Caixa (cada inscrição/renovação regista em que fase o
+    catequisando ficou matriculado nesse ano)."""
+    oid = object_id_or_404(catequisando_id)
+    if await db.catequisandos.find_one({"_id": oid}) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catequisando não encontrado")
+
+    resultado = []
+    cursor = db.caixa.find({
+        "catequisando_id": catequisando_id,
+        "categoria": {"$in": list(CATEGORIAS_MATRICULA)},
+    }).sort("ano_letivo", -1)
+    async for doc in cursor:
+        fase = await db.fases.find_one({"_id": object_id_or_404(doc["fase_id"])}) if doc.get("fase_id") else None
+        resultado.append({
+            "ano_letivo": doc.get("ano_letivo"),
+            "fase_id": doc.get("fase_id"),
+            "fase_nome": fase["nome"] if fase else "Fase desconhecida",
+            "categoria": doc["categoria"],
+            "data": doc["data"].date().isoformat(),
+        })
+    return resultado
 
 
 @router.get("/{catequisando_id}/pdf")
@@ -297,6 +362,8 @@ async def atualizar_catequisando(
 
     if "nome" in update_doc:
         update_doc["nome"] = update_doc["nome"].strip()
+        await _garantir_nome_unico(db, update_doc["nome"], ignorar_id=catequisando_id)
+        update_doc["nome_normalizado"] = _normalizar_nome(update_doc["nome"])
     if "data_nascimento" in update_doc and update_doc["data_nascimento"] is not None:
         update_doc["data_nascimento"] = datetime.combine(update_doc["data_nascimento"], datetime.min.time())
     if "fase_id" in update_doc:
@@ -307,9 +374,15 @@ async def atualizar_catequisando(
     if not update_doc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nada para atualizar")
 
-    doc = await db.catequisandos.find_one_and_update(
-        {"_id": oid}, {"$set": update_doc}, return_document=ReturnDocument.AFTER
-    )
+    try:
+        doc = await db.catequisandos.find_one_and_update(
+            {"_id": oid}, {"$set": update_doc}, return_document=ReturnDocument.AFTER
+        )
+    except DuplicateKeyError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Já existe um catequisando registado com esse nome",
+        )
     if doc is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catequisando não encontrado")
 

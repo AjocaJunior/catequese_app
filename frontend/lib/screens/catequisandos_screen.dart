@@ -25,9 +25,23 @@ class _CatequisandosScreenState extends State<CatequisandosScreen> {
   List<Catequisando> _catequisandos = [];
   List<Fase> _fases = [];
   String? _fasesFiltroId;
+  final _pesquisaController = TextEditingController();
+  String _termoPesquisa = '';
   bool _loading = true;
   String? _erro;
   bool _imprimindo = false;
+
+  List<Catequisando> get _catequisandosFiltrados {
+    if (_termoPesquisa.trim().isEmpty) return _catequisandos;
+    final termo = _termoPesquisa.trim().toLowerCase();
+    return _catequisandos.where((c) => c.nome.toLowerCase().contains(termo)).toList();
+  }
+
+  @override
+  void dispose() {
+    _pesquisaController.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -230,20 +244,51 @@ class _CatequisandosScreenState extends State<CatequisandosScreen> {
               },
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: TextField(
+              controller: _pesquisaController,
+              decoration: InputDecoration(
+                labelText: 'Pesquisar por nome',
+                border: const OutlineInputBorder(),
+                isDense: true,
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _termoPesquisa.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _pesquisaController.clear();
+                          setState(() => _termoPesquisa = '');
+                        },
+                      ),
+              ),
+              onChanged: (v) => setState(() => _termoPesquisa = v),
+            ),
+          ),
           if (_loading)
             const Expanded(child: Center(child: CircularProgressIndicator()))
           else if (_erro != null)
             Expanded(child: Center(child: Text(_erro!)))
-          else if (_catequisandos.isEmpty)
-            const Expanded(child: Center(child: Text('Nenhum catequisando encontrado.')))
+          else if (_catequisandosFiltrados.isEmpty)
+            Expanded(
+              child: Center(
+                child: Text(
+                  _catequisandos.isEmpty
+                      ? 'Nenhum catequisando encontrado.'
+                      : 'Nenhum catequisando corresponde a "$_termoPesquisa".',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            )
           else
             Expanded(
               child: RefreshIndicator(
                 onRefresh: _carregar,
                 child: ListView.builder(
-                  itemCount: _catequisandos.length,
+                  itemCount: _catequisandosFiltrados.length,
                   itemBuilder: (context, i) {
-                    final c = _catequisandos[i];
+                    final c = _catequisandosFiltrados[i];
                     return ListTile(
                       leading: const CircleAvatar(child: Icon(Icons.person_outline)),
                       title: Text(c.nome),

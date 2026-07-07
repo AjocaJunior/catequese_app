@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../models/catequisando.dart';
+import '../models/historico_inscricao.dart';
 import 'api_client.dart';
 
 class CatequisandoService {
@@ -41,6 +42,13 @@ class CatequisandoService {
   /// Descarrega o PDF do processo individual (dados + histórico de presenças).
   Future<Uint8List> baixarProcessoPdf(String catequisandoId) =>
       _client.getBytes('/catequisandos/$catequisandoId/pdf');
+
+  /// Histórico de fase por ano letivo, derivado das inscrições/renovações
+  /// já registadas na Caixa para este catequisando.
+  Future<List<HistoricoInscricao>> historico(String catequisandoId) async {
+    final data = await _client.get('/catequisandos/$catequisandoId/historico') as List;
+    return data.map((e) => HistoricoInscricao.fromJson(e as Map<String, dynamic>)).toList();
+  }
 
   /// Importa catequisandos a partir de um ficheiro .xlsx.
   /// [bytes] deve ser o conteúdo binário do ficheiro escolhido pelo utilizador.

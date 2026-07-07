@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 import '../models/catequista.dart';
@@ -18,6 +19,7 @@ class _GerirCatequistasScreenState extends State<GerirCatequistasScreen> {
   String _meuId = '';
   List<Catequista> _catequistas = [];
   bool _loading = true;
+  bool _imprimindo = false;
   String? _erro;
 
   @override
@@ -57,10 +59,36 @@ class _GerirCatequistasScreenState extends State<GerirCatequistasScreen> {
     }
   }
 
+  Future<void> _imprimirLista() async {
+    setState(() => _imprimindo = true);
+    try {
+      final bytes = await _service.baixarListaPdf();
+      await Printing.layoutPdf(onLayout: (_) async => bytes);
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e is ApiException ? e.message : 'Erro ao gerar a lista';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } finally {
+      if (mounted) setState(() => _imprimindo = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Gerir catequistas')),
+      appBar: AppBar(
+        title: const Text('Gerir catequistas'),
+        actions: [
+          IconButton(
+            icon: _imprimindo
+                ? const SizedBox(
+                    height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.print_outlined),
+            tooltip: 'Imprimir lista por fase',
+            onPressed: _imprimindo ? null : _imprimirLista,
+          ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _erro != null
@@ -77,7 +105,9 @@ class _GerirCatequistasScreenState extends State<GerirCatequistasScreen> {
                           child: Icon(c.isAdmin ? Icons.shield_outlined : Icons.person_outline),
                         ),
                         title: Text(c.nome + (souEu ? ' (tu)' : '')),
-                        subtitle: Text(c.email),
+                        subtitle: Text(
+                          c.contacto != null && c.contacto!.isNotEmpty ? '${c.email} · ${c.contacto}' : c.email,
+                        ),
                         trailing: Switch(
                           value: c.isAdmin,
                           onChanged: souEu ? null : (v) => _alternarAdmin(c, v),

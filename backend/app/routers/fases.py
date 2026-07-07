@@ -6,6 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
+from app.core.ano_letivo import sincronizar_atribuicoes_fase
 from app.core.database import get_database
 from app.core.deps import get_current_admin, get_current_catequista
 from app.core.mongo_utils import object_id_or_404
@@ -34,6 +35,8 @@ async def _to_out(db: AsyncIOMotorDatabase, doc: dict) -> FaseOut:
         nome=doc["nome"],
         ordem=doc["ordem"],
         nome_catecismo=doc.get("nome_catecismo"),
+        dia_semana=doc.get("dia_semana"),
+        hora=doc.get("hora"),
         local=doc.get("local"),
         programa_pdf_url=doc.get("programa_pdf_url"),
         catequistas=catequistas,
@@ -56,6 +59,8 @@ async def criar_fase(
         "nome": dados.nome.strip(),
         "ordem": ordem,
         "nome_catecismo": (dados.nome_catecismo or "").strip() or None,
+        "dia_semana": dados.dia_semana.value if dados.dia_semana else None,
+        "hora": (dados.hora or "").strip() or None,
         "local": (dados.local or "").strip() or None,
         "programa_pdf_url": (dados.programa_pdf_url or "").strip() or None,
         "catequista_ids": [],
@@ -92,9 +97,11 @@ async def atualizar_fase(
     update_doc = dados.model_dump(exclude_unset=True)
     if "nome" in update_doc:
         update_doc["nome"] = update_doc["nome"].strip()
-    for campo in ("nome_catecismo", "local", "programa_pdf_url"):
+    for campo in ("nome_catecismo", "hora", "local", "programa_pdf_url"):
         if campo in update_doc and update_doc[campo] is not None:
             update_doc[campo] = update_doc[campo].strip() or None
+    if "dia_semana" in update_doc and update_doc["dia_semana"] is not None:
+        update_doc["dia_semana"] = update_doc["dia_semana"].value
 
     if not update_doc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nada para atualizar")
@@ -142,6 +149,8 @@ async def definir_catequistas_da_fase(
     )
     if doc is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fase não encontrada")
+
+    await sincronizar_atribuicoes_fase(db, fase_id, ids_validos)
 
     return await _to_out(db, doc)
 

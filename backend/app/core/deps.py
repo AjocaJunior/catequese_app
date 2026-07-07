@@ -41,6 +41,7 @@ async def get_current_catequista(
         id=str(doc["_id"]),
         nome=doc["nome"],
         email=doc["email"],
+        contacto=doc.get("contacto"),
         is_admin=doc.get("is_admin", False),
         criado_em=doc["criado_em"],
     )

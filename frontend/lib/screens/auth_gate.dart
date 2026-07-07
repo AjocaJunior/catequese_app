@@ -3,10 +3,12 @@ import 'package:provider/provider.dart';
 
 import '../services/auth_service.dart';
 import 'home_screen.dart';
-import 'login_screen.dart';
+import 'publico_screen.dart';
 
 /// Ponto de entrada da navegação: no arranque tenta restaurar a sessão
-/// guardada; depois mostra o LoginScreen ou o HomeScreen consoante o estado.
+/// guardada. Com sessão válida mostra o HomeScreen; sem sessão, mostra a
+/// área pública (PublicoScreen), que por sua vez tem um botão para aceder
+/// ao login.
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -31,6 +33,6 @@ class _AuthGateState extends State<AuthGate> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    return auth.isAuthenticated ? const HomeScreen() : const LoginScreen();
+    return auth.isAuthenticated ? const HomeScreen() : const PublicoScreen();
   }
 }

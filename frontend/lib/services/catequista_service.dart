@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../models/catequista.dart';
 import 'api_client.dart';
 
@@ -14,4 +16,7 @@ class CatequistaService {
     final data = await _client.patch('/catequistas/$id/admin', {'is_admin': isAdmin});
     return Catequista.fromJson(data as Map<String, dynamic>);
   }
+
+  /// PDF com a lista de catequistas agrupada por fase, com contactos.
+  Future<Uint8List> baixarListaPdf() => _client.getBytes('/catequistas/pdf');
 }

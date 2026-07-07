@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/auth_service.dart';
-import 'publico_screen.dart';
+import 'esqueci_senha_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -36,7 +36,11 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     setState(() => _submitting = false);
 
-    if (!ok) {
+    if (ok) {
+      // O AuthGate já trocou para o HomeScreen por baixo (está a "escutar"
+      // o AuthService) — só falta fechar este ecrã de login para o revelar.
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(auth.lastError ?? 'Erro ao iniciar sessão')),
       );
@@ -49,6 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final isWide = width > 700;
 
     return Scaffold(
+      appBar: AppBar(),
       body: Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: isWide ? 420 : double.infinity),
@@ -59,7 +64,14 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.church, size: 56),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.asset(
+                      'assets/images/icone_comunidade.png',
+                      width: 88,
+                      height: 88,
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   const Text(
                     'Gestão Catequética',
@@ -102,7 +114,20 @@ class _LoginScreenState extends State<LoginScreen> {
                         (v == null || v.length < 6) ? 'Mínimo 6 caracteres' : null,
                     onFieldSubmitted: (_) => _submit(),
                   ),
-                  const SizedBox(height: 24),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: _submitting
+                          ? null
+                          : () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const EsqueciSenhaScreen()),
+                              );
+                            },
+                      child: const Text('Esqueci a senha'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -127,15 +152,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             );
                           },
                     child: const Text('Ainda não tenho conta — registar'),
-                  ),
-                  TextButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const PublicoScreen()),
-                      );
-                    },
-                    icon: const Icon(Icons.public, size: 18),
-                    label: const Text('Ver informação pública (sem login)'),
                   ),
                 ],
               ),

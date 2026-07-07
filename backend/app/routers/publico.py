@@ -2,14 +2,17 @@ from datetime import date
 from typing import Optional
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
 
 from app.core.database import get_database
+from app.core.mongo_utils import object_id_or_404
 from app.models.evento import EventoOut
+from app.models.foto import FotoOut
 from app.models.sector import SectorOut
 from app.routers.eventos import _to_out as evento_to_out
+from app.routers.fotos import foto_to_out
 from app.routers.sectores import _to_out as sector_to_out
 
 router = APIRouter(prefix="/publico", tags=["público"])
@@ -71,6 +74,21 @@ async def listar_eventos_publico(db: AsyncIOMotorDatabase = Depends(get_database
 async def listar_sectores_publico(db: AsyncIOMotorDatabase = Depends(get_database)):
     cursor = db.sectores.find().sort("nome", 1)
     return [await sector_to_out(db, doc) async for doc in cursor]
+
+
+@router.get("/fotos", response_model=list[FotoOut])
+async def listar_fotos_publico(db: AsyncIOMotorDatabase = Depends(get_database)):
+    cursor = db.fotos.find({}, {"imagem": 0}).sort("criado_em", -1)
+    return [foto_to_out(doc) async for doc in cursor]
+
+
+@router.get("/fotos/{foto_id}/imagem")
+async def obter_imagem_publico(foto_id: str, db: AsyncIOMotorDatabase = Depends(get_database)):
+    oid = object_id_or_404(foto_id)
+    doc = await db.fotos.find_one({"_id": oid})
+    if doc is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Foto não encontrada")
+    return Response(content=bytes(doc["imagem"]), media_type="image/jpeg")
 
 
 @router.get("/organograma", response_model=OrganogramaOut)

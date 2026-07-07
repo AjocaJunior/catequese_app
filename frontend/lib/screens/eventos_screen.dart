@@ -183,7 +183,7 @@ class _EventosScreenState extends State<EventosScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Eventos da Paróquia')),
+      appBar: AppBar(title: const Text('Eventos da Comunidade')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _erro != null

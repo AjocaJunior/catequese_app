@@ -13,7 +13,11 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"  # development | production
 
     # MongoDB
-    MONGODB_URI: str = "mongodb://localhost:27017"
+    # SEM valor por omissão de propósito: se o .env não for encontrado,
+    # o arranque falha imediatamente com um erro claro do Pydantic,
+    # em vez de cair silenciosamente para "localhost" e dar um erro de
+    # SSL confuso minutos depois.
+    MONGODB_URI: str
     DB_NAME: str = "catequese"
 
     # Autenticação (usado a partir do Módulo 2)
@@ -24,6 +28,13 @@ class Settings(BaseSettings):
     # CORS - lista de origens permitidas, separadas por vírgula
     # Ex: "https://catequese-app.onrender.com,http://localhost:5000"
     CORS_ORIGINS: str = "*"
+
+    # Email (recuperação de palavra-passe). Vazio = funcionalidade desativada
+    # de forma controlada (dá erro claro em vez de tentar ligar a lado nenhum).
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -1,3 +1,5 @@
+import 'sector.dart' show DiaSemana;
+
 class CatequistaResumo {
   final String id;
   final String nome;
@@ -15,6 +17,8 @@ class Fase {
   final String nome;
   final int ordem;
   final String? nomeCatecismo;
+  final DiaSemana? diaSemana;
+  final String? hora;
   final String? local;
   final String? programaPdfUrl;
   final List<CatequistaResumo> catequistas;
@@ -24,6 +28,8 @@ class Fase {
     required this.nome,
     required this.ordem,
     this.nomeCatecismo,
+    this.diaSemana,
+    this.hora,
     this.local,
     this.programaPdfUrl,
     this.catequistas = const [],
@@ -34,6 +40,8 @@ class Fase {
         nome: json['nome'] as String,
         ordem: json['ordem'] as int,
         nomeCatecismo: json['nome_catecismo'] as String?,
+        diaSemana: DiaSemana.fromValor(json['dia_semana'] as String?),
+        hora: json['hora'] as String?,
         local: json['local'] as String?,
         programaPdfUrl: json['programa_pdf_url'] as String?,
         catequistas: (json['catequistas'] as List? ?? [])
