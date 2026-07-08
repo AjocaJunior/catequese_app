@@ -100,14 +100,22 @@ class _GerirCatequistasScreenState extends State<GerirCatequistasScreen> {
                     itemBuilder: (context, i) {
                       final c = _catequistas[i];
                       final souEu = c.id == _meuId;
+                      final acesso = c.isAdmin
+                          ? 'Administrador'
+                          : c.temFaseAtribuida
+                              ? 'Atribuído a fase(s)'
+                              : c.eResponsavelDeSector
+                                  ? 'Responsável: ${c.sectoresResponsavel.map((s) => s.nome).join(', ')}'
+                                  : 'Sem fase nem sector atribuído';
                       return ListTile(
                         leading: CircleAvatar(
                           child: Icon(c.isAdmin ? Icons.shield_outlined : Icons.person_outline),
                         ),
                         title: Text(c.nome + (souEu ? ' (tu)' : '')),
                         subtitle: Text(
-                          c.contacto != null && c.contacto!.isNotEmpty ? '${c.email} · ${c.contacto}' : c.email,
+                          '${c.contacto != null && c.contacto!.isNotEmpty ? '${c.email} · ${c.contacto}' : c.email}\n$acesso',
                         ),
+                        isThreeLine: true,
                         trailing: Switch(
                           value: c.isAdmin,
                           onChanged: souEu ? null : (v) => _alternarAdmin(c, v),

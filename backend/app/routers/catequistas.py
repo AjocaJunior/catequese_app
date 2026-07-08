@@ -3,9 +3,12 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
 from pymongo import ReturnDocument
 
+from app.core.auditoria import registar
+from app.core.catequista_helpers import construir_catequista_completo
 from app.core.database import get_database
 from app.core.deps import get_current_admin, get_current_catequista
 from app.core.mongo_utils import object_id_or_404
+from app.models.auditoria import AcaoAuditoria
 from app.models.catequista import CatequistaOut
 from app.services.pdf_lista_catequistas import gerar_pdf_lista_catequistas
 
@@ -16,24 +19,13 @@ class AlterarAdminBody(BaseModel):
     is_admin: bool
 
 
-def _to_out(doc: dict) -> CatequistaOut:
-    return CatequistaOut(
-        id=str(doc["_id"]),
-        nome=doc["nome"],
-        email=doc["email"],
-        contacto=doc.get("contacto"),
-        is_admin=doc.get("is_admin", False),
-        criado_em=doc["criado_em"],
-    )
-
-
 @router.get("", response_model=list[CatequistaOut])
 async def listar_catequistas(
     db: AsyncIOMotorDatabase = Depends(get_database),
     _: CatequistaOut = Depends(get_current_admin),
 ):
     cursor = db.catequistas.find().sort("nome", 1)
-    return [_to_out(doc) async for doc in cursor]
+    return [await construir_catequista_completo(db, doc) async for doc in cursor]
 
 
 @router.get("/pdf")
@@ -88,4 +80,10 @@ async def alterar_admin(
     if doc is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catequista não encontrado")
 
-    return _to_out(doc)
+    await registar(
+        db, admin_atual, AcaoAuditoria.ATUALIZAR, "Catequista", catequista_id,
+        f"{'Promoveu' if dados.is_admin else 'Removeu admin de'} '{doc['nome']}'"
+        f"{' a administrador' if dados.is_admin else ''}",
+    )
+
+    return await construir_catequista_completo(db, doc)

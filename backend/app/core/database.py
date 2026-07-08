@@ -79,6 +79,7 @@ async def ensure_indexes() -> None:
     await mongodb.db.retiros.create_index("data")
     await mongodb.db.eventos.create_index("data")
     await mongodb.db.sectores.create_index("nome")
+    await mongodb.db.sectores.create_index("responsavel_catequista_id")
     await mongodb.db.ministerios.create_index("nome")
     await mongodb.db.catequisandos.create_index("sector_id")
     await mongodb.db.fotos.create_index("criado_em")
@@ -92,6 +93,9 @@ async def ensure_indexes() -> None:
     )
     await mongodb.db.caixa.create_index([("catequisando_id", 1), ("ano_letivo", 1), ("categoria", 1)])
     await _criar_indice_seguro(mongodb.db.pautas, [("fase_id", 1), ("ano_letivo", 1)], unique=True)
+    await mongodb.db.auditoria.create_index("data")
+    await mongodb.db.auditoria.create_index("entidade")
+    await mongodb.db.auditoria.create_index("catequista_id")
 
 
 def get_database() -> AsyncIOMotorDatabase:

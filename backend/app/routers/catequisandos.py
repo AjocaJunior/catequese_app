@@ -8,10 +8,12 @@ from openpyxl import load_workbook
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
+from app.core.auditoria import registar
 from app.core.database import get_database
 from app.core.deps import get_current_admin, get_current_catequista
 from app.core.mongo_utils import object_id_or_404
 from app.core.permissoes import garantir_acesso_fase
+from app.models.auditoria import AcaoAuditoria
 from app.models.caixa import CATEGORIAS_MATRICULA
 from app.models.catequista import CatequistaOut
 from app.models.catequisando import (
@@ -83,7 +85,7 @@ def _to_out(doc: dict, fase_nome: str, sector_nome: str | None = None) -> Catequ
 async def criar_catequisando(
     dados: CatequisandoCreate,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_catequista),
+    catequista: CatequistaOut = Depends(get_current_catequista),
 ):
     fase_nome = await _fase_nome_ou_erro(db, dados.fase_id)
     sector_nome = await _sector_nome_ou_erro(db, dados.sector_id) if dados.sector_id else None
@@ -104,6 +106,11 @@ async def criar_catequisando(
             detail=f"Já existe um catequisando registado com o nome '{doc['nome']}'",
         )
     doc["_id"] = result.inserted_id
+
+    await registar(
+        db, catequista, AcaoAuditoria.CRIAR, "Catequisando", str(result.inserted_id),
+        f"Criou catequisando '{doc['nome']}' na {fase_nome}",
+    )
 
     return _to_out(doc, fase_nome, sector_nome)
 
@@ -355,7 +362,7 @@ async def atualizar_catequisando(
     catequisando_id: str,
     dados: CatequisandoUpdate,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_admin),
+    admin: CatequistaOut = Depends(get_current_admin),
 ):
     oid = object_id_or_404(catequisando_id)
     update_doc = dados.model_dump(exclude_unset=True)
@@ -392,6 +399,8 @@ async def atualizar_catequisando(
         sector = await db.sectores.find_one({"_id": object_id_or_404(doc["sector_id"])})
         sector_nome = sector["nome"] if sector else None
 
+    await registar(db, admin, AcaoAuditoria.ATUALIZAR, "Catequisando", catequisando_id, f"Editou catequisando '{doc['nome']}'")
+
     return _to_out(doc, fase["nome"] if fase else "Fase desconhecida", sector_nome)
 
 
@@ -399,9 +408,13 @@ async def atualizar_catequisando(
 async def apagar_catequisando(
     catequisando_id: str,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_admin),
+    admin: CatequistaOut = Depends(get_current_admin),
 ):
     oid = object_id_or_404(catequisando_id)
-    result = await db.catequisandos.delete_one({"_id": oid})
-    if result.deleted_count == 0:
+    doc = await db.catequisandos.find_one({"_id": oid})
+    if doc is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catequisando não encontrado")
+
+    await db.catequisandos.delete_one({"_id": oid})
+
+    await registar(db, admin, AcaoAuditoria.APAGAR, "Catequisando", catequisando_id, f"Apagou catequisando '{doc['nome']}'")

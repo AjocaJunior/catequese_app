@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/catequista.dart';
 import '../models/ministerio.dart';
 import '../models/sector.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../services/catequista_service.dart';
 import '../services/ministerio_service.dart';
 import '../services/sector_service.dart';
 
@@ -18,6 +20,7 @@ class SectoresScreen extends StatefulWidget {
 class _SectoresScreenState extends State<SectoresScreen> {
   late SectorService _service;
   late MinisterioService _ministerioService;
+  late CatequistaService _catequistaService;
   bool _isAdmin = false;
   List<Sector> _sectores = [];
   bool _loading = true;
@@ -29,6 +32,7 @@ class _SectoresScreenState extends State<SectoresScreen> {
     final auth = context.read<AuthService>();
     _service = SectorService(auth.token);
     _ministerioService = MinisterioService(auth.token);
+    _catequistaService = CatequistaService(auth.token);
     _isAdmin = auth.catequista?.isAdmin ?? false;
     _carregar();
   }
@@ -52,8 +56,10 @@ class _SectoresScreenState extends State<SectoresScreen> {
 
   Future<void> _mostrarFormulario({Sector? sector}) async {
     List<Ministerio> ministerios;
+    List<Catequista> catequistas = [];
     try {
       ministerios = await _ministerioService.listar();
+      if (_isAdmin) catequistas = await _catequistaService.listar();
     } catch (e) {
       _mostrarErro(e);
       return;
@@ -66,6 +72,7 @@ class _SectoresScreenState extends State<SectoresScreen> {
     final responsavelController = TextEditingController(text: sector?.responsavelNome ?? '');
     DiaSemana? diaSemana = sector?.diaSemana;
     String? ministerioId = sector?.ministerioId;
+    String? responsavelCatequistaId = sector?.responsavelCatequistaId;
     final formKey = GlobalKey<FormState>();
 
     final confirmar = await showDialog<bool>(
@@ -131,11 +138,39 @@ class _SectoresScreenState extends State<SectoresScreen> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: responsavelController,
+                      enabled: _isAdmin || responsavelCatequistaId == null,
                       decoration: const InputDecoration(
                         labelText: 'Responsável pelo sector (opcional)',
                         hintText: 'Nome de quem coordena este sector',
                       ),
                     ),
+                    if (_isAdmin) ...[
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String?>(
+                        value: responsavelCatequistaId,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Ligar a uma conta (opcional)',
+                          helperText: 'Dá acesso ao Inventário deste sector a essa pessoa',
+                        ),
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text('Nenhuma conta ligada')),
+                          ...catequistas.map((c) => DropdownMenuItem(
+                                value: c.id,
+                                child: Text(c.nome, overflow: TextOverflow.ellipsis),
+                              )),
+                        ],
+                        onChanged: (v) {
+                          setStateDialog(() {
+                            responsavelCatequistaId = v;
+                            if (v != null) {
+                              final escolhido = catequistas.firstWhere((c) => c.id == v);
+                              responsavelController.text = escolhido.nome;
+                            }
+                          });
+                        },
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -165,6 +200,7 @@ class _SectoresScreenState extends State<SectoresScreen> {
           local: localController.text.trim(),
           ministerioId: ministerioId,
           responsavelNome: responsavelController.text.trim(),
+          responsavelCatequistaId: responsavelCatequistaId,
         );
       } else {
         await _service.atualizar(
@@ -175,6 +211,7 @@ class _SectoresScreenState extends State<SectoresScreen> {
           local: localController.text.trim(),
           ministerioId: ministerioId,
           responsavelNome: responsavelController.text.trim(),
+          responsavelCatequistaId: responsavelCatequistaId,
         );
       }
       _carregar();
@@ -217,7 +254,7 @@ class _SectoresScreenState extends State<SectoresScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Sectores da Comunidade')),
+      appBar: AppBar(title: const Text('Sectores')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _erro != null

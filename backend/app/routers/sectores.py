@@ -21,6 +21,12 @@ async def _ministerio_nome_ou_erro(db: AsyncIOMotorDatabase, ministerio_id: str)
     return ministerio["nome"]
 
 
+async def _validar_responsavel(db: AsyncIOMotorDatabase, catequista_id: str) -> None:
+    oid = object_id_or_404(catequista_id)
+    if await db.catequistas.find_one({"_id": oid}) is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="O catequista indicado não existe")
+
+
 async def _to_out(db: AsyncIOMotorDatabase, doc: dict) -> SectorOut:
     ministerio_nome = None
     ministerio_id = doc.get("ministerio_id")
@@ -37,6 +43,7 @@ async def _to_out(db: AsyncIOMotorDatabase, doc: dict) -> SectorOut:
         ministerio_id=ministerio_id,
         ministerio_nome=ministerio_nome,
         responsavel_nome=doc.get("responsavel_nome"),
+        responsavel_catequista_id=doc.get("responsavel_catequista_id"),
         criado_em=doc["criado_em"],
     )
 
@@ -45,10 +52,17 @@ async def _to_out(db: AsyncIOMotorDatabase, doc: dict) -> SectorOut:
 async def criar_sector(
     dados: SectorCreate,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_catequista),
+    catequista: CatequistaOut = Depends(get_current_catequista),
 ):
     if dados.ministerio_id:
         await _ministerio_nome_ou_erro(db, dados.ministerio_id)
+    if dados.responsavel_catequista_id:
+        if not catequista.is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Só administradores podem definir o responsável do sector",
+            )
+        await _validar_responsavel(db, dados.responsavel_catequista_id)
 
     doc = {
         "nome": dados.nome.strip(),
@@ -57,6 +71,7 @@ async def criar_sector(
         "local": (dados.local or "").strip() or None,
         "ministerio_id": dados.ministerio_id,
         "responsavel_nome": (dados.responsavel_nome or "").strip() or None,
+        "responsavel_catequista_id": dados.responsavel_catequista_id,
         "criado_em": datetime.now(timezone.utc),
     }
     result = await db.sectores.insert_one(doc)
@@ -78,10 +93,16 @@ async def atualizar_sector(
     sector_id: str,
     dados: SectorUpdate,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_catequista),
+    catequista: CatequistaOut = Depends(get_current_catequista),
 ):
     oid = object_id_or_404(sector_id)
     update_doc = dados.model_dump(exclude_unset=True)
+
+    if "responsavel_catequista_id" in update_doc and not catequista.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Só administradores podem definir o responsável do sector",
+        )
 
     if "nome" in update_doc:
         update_doc["nome"] = update_doc["nome"].strip()
@@ -93,6 +114,8 @@ async def atualizar_sector(
         update_doc["local"] = update_doc["local"].strip() or None
     if "responsavel_nome" in update_doc and update_doc["responsavel_nome"] is not None:
         update_doc["responsavel_nome"] = update_doc["responsavel_nome"].strip() or None
+    if "responsavel_catequista_id" in update_doc and update_doc["responsavel_catequista_id"]:
+        await _validar_responsavel(db, update_doc["responsavel_catequista_id"])
     if "ministerio_id" in update_doc and update_doc["ministerio_id"]:
         await _ministerio_nome_ou_erro(db, update_doc["ministerio_id"])
 

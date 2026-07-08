@@ -8,9 +8,12 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo.errors import DuplicateKeyError
 from starlette.concurrency import run_in_threadpool
 
+from app.core.auditoria import registar as registar_auditoria
+from app.core.catequista_helpers import construir_catequista_completo
 from app.core.database import get_database
 from app.core.deps import get_current_catequista
 from app.core.security import create_access_token, hash_password, verify_password
+from app.models.auditoria import AcaoAuditoria
 from app.models.catequista import (
     AlterarSenhaRequest,
     AtualizarPerfilRequest,
@@ -60,14 +63,13 @@ async def registar(dados: CatequistaCreate, db: AsyncIOMotorDatabase = Depends(g
             detail="Já existe um catequista registado com este email",
         )
 
-    return CatequistaOut(
-        id=str(result.inserted_id),
-        nome=doc["nome"],
-        email=doc["email"],
-        contacto=doc.get("contacto"),
-        is_admin=doc["is_admin"],
-        criado_em=doc["criado_em"],
+    doc["_id"] = result.inserted_id
+    catequista_out = await construir_catequista_completo(db, doc)
+    await registar_auditoria(
+        db, catequista_out, AcaoAuditoria.CRIAR, "Catequista", str(result.inserted_id),
+        "Registou-se na aplicação" + (" (administrador inicial)" if is_admin else ""),
     )
+    return catequista_out
 
 
 @router.post("/login", response_model=Token)
@@ -83,21 +85,18 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    catequista_out = CatequistaOut(
-        id=str(doc["_id"]),
-        nome=doc["nome"],
-        email=doc["email"],
-        contacto=doc.get("contacto"),
-        is_admin=doc.get("is_admin", False),
-        criado_em=doc["criado_em"],
-    )
+    catequista_out = await construir_catequista_completo(db, doc)
     token = create_access_token(subject=str(doc["_id"]))
     return Token(access_token=token, catequista=catequista_out)
 
 
 @router.get("/eu", response_model=CatequistaOut)
-async def eu(catequista: CatequistaOut = Depends(get_current_catequista)):
-    return catequista
+async def eu(
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    catequista: CatequistaOut = Depends(get_current_catequista),
+):
+    doc = await db.catequistas.find_one({"_id": ObjectId(catequista.id)})
+    return await construir_catequista_completo(db, doc)
 
 
 @router.put("/perfil", response_model=CatequistaOut)
@@ -116,14 +115,7 @@ async def atualizar_perfil(
         await db.catequistas.update_one({"_id": ObjectId(catequista.id)}, {"$set": update_doc})
 
     doc = await db.catequistas.find_one({"_id": ObjectId(catequista.id)})
-    return CatequistaOut(
-        id=str(doc["_id"]),
-        nome=doc["nome"],
-        email=doc["email"],
-        contacto=doc.get("contacto"),
-        is_admin=doc.get("is_admin", False),
-        criado_em=doc["criado_em"],
-    )
+    return await construir_catequista_completo(db, doc)
 
 
 @router.put("/senha", status_code=status.HTTP_204_NO_CONTENT)

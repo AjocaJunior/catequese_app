@@ -17,6 +17,7 @@ class SectorService {
     String? local,
     String? ministerioId,
     String? responsavelNome,
+    String? responsavelCatequistaId,
   }) async {
     final resposta = await _client.post('/sectores', {
       'nome': nome,
@@ -25,6 +26,7 @@ class SectorService {
       if (local != null) 'local': local,
       if (ministerioId != null) 'ministerio_id': ministerioId,
       if (responsavelNome != null) 'responsavel_nome': responsavelNome,
+      if (responsavelCatequistaId != null) 'responsavel_catequista_id': responsavelCatequistaId,
     });
     return Sector.fromJson(resposta as Map<String, dynamic>);
   }
@@ -37,6 +39,7 @@ class SectorService {
     String? local,
     String? ministerioId,
     String? responsavelNome,
+    String? responsavelCatequistaId,
   }) async {
     final body = <String, dynamic>{
       if (nome != null) 'nome': nome,
@@ -45,6 +48,7 @@ class SectorService {
       if (local != null) 'local': local,
       if (ministerioId != null) 'ministerio_id': ministerioId,
       if (responsavelNome != null) 'responsavel_nome': responsavelNome,
+      if (responsavelCatequistaId != null) 'responsavel_catequista_id': responsavelCatequistaId,
     };
     final resposta = await _client.put('/sectores/$id', body);
     return Sector.fromJson(resposta as Map<String, dynamic>);

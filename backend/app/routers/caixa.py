@@ -5,9 +5,11 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo import ReturnDocument
 
 from app.core.ano_letivo import obter_ano_letivo_atual
+from app.core.auditoria import registar
 from app.core.database import get_database
 from app.core.deps import get_current_admin, get_current_catequista
 from app.core.mongo_utils import object_id_or_404
+from app.models.auditoria import AcaoAuditoria
 from app.models.caixa import (
     CATEGORIAS_MATRICULA,
     CaixaTransacaoCreate,
@@ -123,6 +125,16 @@ async def criar_transacao(
     }
     result = await db.caixa.insert_one(doc)
     doc["_id"] = result.inserted_id
+
+    resumo_texto = f"Registou {doc['tipo']} '{doc['categoria']}' de {doc['valor']:.2f} MT"
+    if dados.catequisando_id:
+        cat = await db.catequisandos.find_one({"_id": object_id_or_404(dados.catequisando_id)})
+        if cat:
+            resumo_texto += f" para {cat['nome']}"
+    if dados.metodo_pagamento:
+        resumo_texto += f" ({dados.metodo_pagamento.value})"
+    await registar(db, admin, AcaoAuditoria.CRIAR, "Caixa", str(result.inserted_id), resumo_texto)
+
     return await _to_out(db, doc)
 
 
@@ -167,7 +179,7 @@ async def atualizar_transacao(
     transacao_id: str,
     dados: CaixaTransacaoUpdate,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_admin),
+    admin: CatequistaOut = Depends(get_current_admin),
 ):
     oid = object_id_or_404(transacao_id)
     atual = await db.caixa.find_one({"_id": oid})
@@ -209,6 +221,12 @@ async def atualizar_transacao(
     doc = await db.caixa.find_one_and_update(
         {"_id": oid}, {"$set": update_doc}, return_document=ReturnDocument.AFTER
     )
+
+    await registar(
+        db, admin, AcaoAuditoria.ATUALIZAR, "Caixa", transacao_id,
+        f"Atualizou transação '{doc['categoria']}' — {doc['valor']:.2f} MT",
+    )
+
     return await _to_out(db, doc)
 
 
@@ -216,9 +234,16 @@ async def atualizar_transacao(
 async def apagar_transacao(
     transacao_id: str,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_admin),
+    admin: CatequistaOut = Depends(get_current_admin),
 ):
     oid = object_id_or_404(transacao_id)
-    result = await db.caixa.delete_one({"_id": oid})
-    if result.deleted_count == 0:
+    atual = await db.caixa.find_one({"_id": oid})
+    if atual is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transação não encontrada")
+
+    await db.caixa.delete_one({"_id": oid})
+
+    await registar(
+        db, admin, AcaoAuditoria.APAGAR, "Caixa", transacao_id,
+        f"Apagou transação '{atual['categoria']}' — {atual['valor']:.2f} MT",
+    )

@@ -60,6 +60,7 @@ class Sector {
   final String? ministerioId;
   final String? ministerioNome;
   final String? responsavelNome;
+  final String? responsavelCatequistaId;
 
   Sector({
     required this.id,
@@ -70,6 +71,7 @@ class Sector {
     this.ministerioId,
     this.ministerioNome,
     this.responsavelNome,
+    this.responsavelCatequistaId,
   });
 
   factory Sector.fromJson(Map<String, dynamic> json) => Sector(
@@ -81,5 +83,6 @@ class Sector {
         ministerioId: json['ministerio_id'] as String?,
         ministerioNome: json['ministerio_nome'] as String?,
         responsavelNome: json['responsavel_nome'] as String?,
+        responsavelCatequistaId: json['responsavel_catequista_id'] as String?,
       );
 }

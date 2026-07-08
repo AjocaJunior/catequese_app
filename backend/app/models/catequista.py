@@ -10,12 +10,20 @@ class CatequistaCreate(BaseModel):
     password: str = Field(..., min_length=6, max_length=72)
 
 
+class SectorResumoCatequista(BaseModel):
+    """Versão reduzida do sector, usada dentro da CatequistaOut."""
+    id: str
+    nome: str
+
+
 class CatequistaOut(BaseModel):
     id: str
     nome: str
     email: EmailStr
     contacto: Optional[str] = None
     is_admin: bool = False
+    tem_fase_atribuida: bool = False
+    sectores_responsavel: list[SectorResumoCatequista] = []
     criado_em: datetime
 
     model_config = ConfigDict(from_attributes=True)

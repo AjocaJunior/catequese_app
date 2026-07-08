@@ -22,6 +22,9 @@ class SectorCreate(BaseModel):
     local: Optional[str] = Field(None, max_length=100)
     ministerio_id: Optional[str] = Field(None, description="Ministério ao qual este sector pertence")
     responsavel_nome: Optional[str] = Field(None, max_length=150)
+    responsavel_catequista_id: Optional[str] = Field(
+        None, description="Conta (catequista) responsável por gerir este sector, ex: o seu inventário"
+    )
 
 
 class SectorUpdate(BaseModel):
@@ -31,6 +34,7 @@ class SectorUpdate(BaseModel):
     local: Optional[str] = Field(None, max_length=100)
     ministerio_id: Optional[str] = None
     responsavel_nome: Optional[str] = Field(None, max_length=150)
+    responsavel_catequista_id: Optional[str] = None
 
 
 class SectorOut(BaseModel):
@@ -42,4 +46,5 @@ class SectorOut(BaseModel):
     ministerio_id: Optional[str] = None
     ministerio_nome: Optional[str] = None
     responsavel_nome: Optional[str] = None
+    responsavel_catequista_id: Optional[str] = None
     criado_em: datetime
