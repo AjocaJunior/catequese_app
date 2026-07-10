@@ -25,6 +25,7 @@ class _CatequisandosScreenState extends State<CatequisandosScreen> {
   List<Catequisando> _catequisandos = [];
   List<Fase> _fases = [];
   String? _fasesFiltroId;
+  SituacaoCatequisando? _situacaoFiltro = SituacaoCatequisando.ativo;
   final _pesquisaController = TextEditingController();
   String _termoPesquisa = '';
   bool _loading = true;
@@ -59,7 +60,7 @@ class _CatequisandosScreenState extends State<CatequisandosScreen> {
     });
     try {
       final fases = await _faseService.listar();
-      final catequisandos = await _catequisandoService.listar(faseId: _fasesFiltroId);
+      final catequisandos = await _catequisandoService.listar(faseId: _fasesFiltroId, situacao: _situacaoFiltro);
       if (!mounted) return;
       setState(() {
         _fases = fases;
@@ -149,6 +150,40 @@ class _CatequisandosScreenState extends State<CatequisandosScreen> {
     } catch (e) {
       if (!mounted) return;
       final msg = e is ApiException ? e.message : 'Erro ao mudar de fase';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
+  Future<void> _alternarCrismado(Catequisando c) async {
+    final vaiCrismar = c.situacao == SituacaoCatequisando.ativo;
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(vaiCrismar ? 'Marcar como Crismado' : 'Reativar catequisando'),
+        content: Text(
+          vaiCrismar
+              ? '${c.nome} deixa de aparecer nas presenças e pautas ativas de "${c.faseNome}". '
+                  'O histórico mantém-se, e podes reverter isto a qualquer momento.'
+              : '${c.nome} volta a aparecer como Ativo em "${c.faseNome}".',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirmar')),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+
+    try {
+      if (vaiCrismar) {
+        await _catequisandoService.crismar(c.id);
+      } else {
+        await _catequisandoService.reativar(c.id);
+      }
+      _carregar();
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e is ApiException ? e.message : 'Ocorreu um erro';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
@@ -246,6 +281,38 @@ class _CatequisandosScreenState extends State<CatequisandosScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: Wrap(
+              spacing: 8,
+              children: [
+                ChoiceChip(
+                  label: const Text('Ativos'),
+                  selected: _situacaoFiltro == SituacaoCatequisando.ativo,
+                  onSelected: (_) {
+                    setState(() => _situacaoFiltro = SituacaoCatequisando.ativo);
+                    _carregar();
+                  },
+                ),
+                ChoiceChip(
+                  label: const Text('Crismados'),
+                  selected: _situacaoFiltro == SituacaoCatequisando.crismado,
+                  onSelected: (_) {
+                    setState(() => _situacaoFiltro = SituacaoCatequisando.crismado);
+                    _carregar();
+                  },
+                ),
+                ChoiceChip(
+                  label: const Text('Todos'),
+                  selected: _situacaoFiltro == null,
+                  onSelected: (_) {
+                    setState(() => _situacaoFiltro = null);
+                    _carregar();
+                  },
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: TextField(
               controller: _pesquisaController,
               decoration: InputDecoration(
@@ -289,14 +356,23 @@ class _CatequisandosScreenState extends State<CatequisandosScreen> {
                   itemCount: _catequisandosFiltrados.length,
                   itemBuilder: (context, i) {
                     final c = _catequisandosFiltrados[i];
+                    final eCrismado = c.situacao == SituacaoCatequisando.crismado;
                     return ListTile(
-                      leading: const CircleAvatar(child: Icon(Icons.person_outline)),
+                      leading: CircleAvatar(
+                        backgroundColor: eCrismado ? Colors.amber.withValues(alpha: 0.2) : null,
+                        child: Icon(eCrismado ? Icons.workspace_premium_outlined : Icons.person_outline),
+                      ),
                       title: Text(c.nome),
-                      subtitle: Text(c.faseNome),
+                      subtitle: Text(eCrismado ? '${c.faseNome} · Crismado' : c.faseNome),
                       trailing: isAdmin
                           ? Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                IconButton(
+                                  icon: Icon(eCrismado ? Icons.undo : Icons.workspace_premium_outlined),
+                                  tooltip: eCrismado ? 'Reativar' : 'Marcar como Crismado',
+                                  onPressed: () => _alternarCrismado(c),
+                                ),
                                 IconButton(
                                   icon: const Icon(Icons.swap_horiz),
                                   tooltip: 'Mudar de fase',

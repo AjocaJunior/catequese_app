@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.database import connect_to_mongo, close_mongo_connection, ensure_indexes
-from app.routers import health, auth, fases, catequisandos, catequistas, presencas, retiros, eventos, sectores, publico, ministerios, fotos, caixa, inventario, configuracao, pautas, auditoria
+from app.routers import health, auth, fases, catequisandos, catequistas, presencas, retiros, eventos, sectores, publico, ministerios, fotos, caixa, inventario, configuracao, pautas, auditoria, relatorios
 
 settings = get_settings()
 
@@ -46,6 +46,7 @@ app.include_router(inventario.router)
 app.include_router(configuracao.router)
 app.include_router(pautas.router)
 app.include_router(auditoria.router)
+app.include_router(relatorios.router)
 app.include_router(publico.router)
 
 

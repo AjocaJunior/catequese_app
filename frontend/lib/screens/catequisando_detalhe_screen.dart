@@ -111,6 +111,40 @@ class _CatequisandoDetalheScreenState extends State<CatequisandoDetalheScreen> {
   String _formatarData(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
+  Future<void> _alternarCrismado() async {
+    final vaiCrismar = _catequisando.situacao == SituacaoCatequisando.ativo;
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(vaiCrismar ? 'Marcar como Crismado' : 'Reativar catequisando'),
+        content: Text(
+          vaiCrismar
+              ? '${_catequisando.nome} deixa de aparecer nas presenças e pautas ativas de '
+                  '"${_catequisando.faseNome}". O histórico mantém-se, e podes reverter isto depois.'
+              : '${_catequisando.nome} volta a aparecer como Ativo em "${_catequisando.faseNome}".',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirmar')),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+
+    final token = context.read<AuthService>().token;
+    try {
+      final atualizado = vaiCrismar
+          ? await CatequisandoService(token).crismar(_catequisando.id)
+          : await CatequisandoService(token).reativar(_catequisando.id);
+      if (!mounted) return;
+      setState(() => _catequisando = atualizado);
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e is ApiException ? e.message : 'Ocorreu um erro';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isAdmin = context.watch<AuthService>().catequista?.isAdmin ?? false;
@@ -120,6 +154,14 @@ class _CatequisandoDetalheScreenState extends State<CatequisandoDetalheScreen> {
         appBar: AppBar(
           title: Text(c.nome),
           actions: [
+            if (isAdmin)
+              IconButton(
+                icon: Icon(c.situacao == SituacaoCatequisando.crismado
+                    ? Icons.undo
+                    : Icons.workspace_premium_outlined),
+                tooltip: c.situacao == SituacaoCatequisando.crismado ? 'Reativar' : 'Marcar como Crismado',
+                onPressed: _alternarCrismado,
+              ),
             IconButton(
               icon: _imprimindo
                   ? const SizedBox(
@@ -140,6 +182,8 @@ class _CatequisandoDetalheScreenState extends State<CatequisandoDetalheScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _linha('Fase', c.faseNome),
+                    if (c.situacao == SituacaoCatequisando.crismado) _linha('Situação', 'Crismado'),
+                    if (c.genero != null) _linha('Género', c.genero!.rotulo),
                     if (c.sectorNome != null) _linha('Sector pastoral', c.sectorNome!),
                     if (c.dataNascimento != null)
                       _linha('Data de nascimento', _formatarData(c.dataNascimento!)),
@@ -258,7 +302,7 @@ class _CatequisandoDetalheScreenState extends State<CatequisandoDetalheScreen> {
         padding: const EdgeInsets.only(bottom: 8),
         child: RichText(
           text: TextSpan(
-            style: DefaultTextStyle.of(context).style,
+            style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.4),
             children: [
               TextSpan(text: '$rotulo: ', style: const TextStyle(fontWeight: FontWeight.bold)),
               TextSpan(text: valor),

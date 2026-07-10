@@ -4,9 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo import ReturnDocument
 
+from app.core.auditoria import registar
 from app.core.database import get_database
 from app.core.deps import get_current_admin, get_current_catequista
 from app.core.mongo_utils import object_id_or_404
+from app.models.auditoria import AcaoAuditoria
 from app.models.catequista import CatequistaOut
 from app.models.ministerio import MinisterioCreate, MinisterioOut, MinisterioUpdate
 
@@ -26,7 +28,7 @@ def _to_out(doc: dict) -> MinisterioOut:
 async def criar_ministerio(
     dados: MinisterioCreate,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_catequista),
+    catequista: CatequistaOut = Depends(get_current_catequista),
 ):
     doc = {
         "nome": dados.nome.strip(),
@@ -35,6 +37,7 @@ async def criar_ministerio(
     }
     result = await db.ministerios.insert_one(doc)
     doc["_id"] = result.inserted_id
+    await registar(db, catequista, AcaoAuditoria.CRIAR, "Ministério", str(result.inserted_id), f"Criou o ministério '{doc['nome']}'")
     return _to_out(doc)
 
 
@@ -52,7 +55,7 @@ async def atualizar_ministerio(
     ministerio_id: str,
     dados: MinisterioUpdate,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_catequista),
+    catequista: CatequistaOut = Depends(get_current_catequista),
 ):
     oid = object_id_or_404(ministerio_id)
     update_doc = dados.model_dump(exclude_unset=True)
@@ -71,6 +74,8 @@ async def atualizar_ministerio(
     if doc is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ministério não encontrado")
 
+    await registar(db, catequista, AcaoAuditoria.ATUALIZAR, "Ministério", ministerio_id, f"Editou o ministério '{doc['nome']}'")
+
     return _to_out(doc)
 
 
@@ -78,9 +83,10 @@ async def atualizar_ministerio(
 async def apagar_ministerio(
     ministerio_id: str,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_admin),
+    admin: CatequistaOut = Depends(get_current_admin),
 ):
     oid = object_id_or_404(ministerio_id)
+    ministerio = await db.ministerios.find_one({"_id": oid})
 
     em_uso = await db.sectores.count_documents({"ministerio_id": ministerio_id})
     if em_uso > 0:
@@ -92,3 +98,5 @@ async def apagar_ministerio(
     result = await db.ministerios.delete_one({"_id": oid})
     if result.deleted_count == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ministério não encontrado")
+
+    await registar(db, admin, AcaoAuditoria.APAGAR, "Ministério", ministerio_id, f"Apagou o ministério '{ministerio['nome'] if ministerio else ministerio_id}'")

@@ -7,9 +7,11 @@ from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 from app.core.ano_letivo import sincronizar_atribuicoes_fase
+from app.core.auditoria import registar
 from app.core.database import get_database
 from app.core.deps import get_current_admin, get_current_catequista
 from app.core.mongo_utils import object_id_or_404
+from app.models.auditoria import AcaoAuditoria
 from app.models.catequista import CatequistaOut
 from app.models.fase import (
     CatequistaResumo,
@@ -47,7 +49,7 @@ async def _to_out(db: AsyncIOMotorDatabase, doc: dict) -> FaseOut:
 async def criar_fase(
     dados: FaseCreate,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_admin),
+    admin: CatequistaOut = Depends(get_current_admin),
 ):
     if dados.ordem is None:
         ultima = await db.fases.find_one(sort=[("ordem", -1)])
@@ -74,6 +76,7 @@ async def criar_fase(
         )
 
     doc["_id"] = result.inserted_id
+    await registar(db, admin, AcaoAuditoria.CRIAR, "Fase", str(result.inserted_id), f"Criou a fase '{doc['nome']}'")
     return await _to_out(db, doc)
 
 
@@ -91,7 +94,7 @@ async def atualizar_fase(
     fase_id: str,
     dados: FaseUpdate,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_admin),
+    admin: CatequistaOut = Depends(get_current_admin),
 ):
     oid = object_id_or_404(fase_id)
     update_doc = dados.model_dump(exclude_unset=True)
@@ -118,6 +121,8 @@ async def atualizar_fase(
     if doc is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fase não encontrada")
 
+    await registar(db, admin, AcaoAuditoria.ATUALIZAR, "Fase", fase_id, f"Editou a fase '{doc['nome']}'")
+
     return await _to_out(db, doc)
 
 
@@ -126,7 +131,7 @@ async def definir_catequistas_da_fase(
     fase_id: str,
     dados: DefinirCatequistasBody,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_admin),
+    admin: CatequistaOut = Depends(get_current_admin),
 ):
     """Substitui a lista completa de catequistas atribuídos a esta fase.
     Uma fase pode ter vários catequistas (e um catequista pode estar em várias fases)."""
@@ -152,6 +157,11 @@ async def definir_catequistas_da_fase(
 
     await sincronizar_atribuicoes_fase(db, fase_id, ids_validos)
 
+    await registar(
+        db, admin, AcaoAuditoria.ATUALIZAR, "Fase", fase_id,
+        f"Definiu {len(ids_validos)} catequista(s) para a fase '{doc['nome']}'",
+    )
+
     return await _to_out(db, doc)
 
 
@@ -159,7 +169,7 @@ async def definir_catequistas_da_fase(
 async def apagar_fase(
     fase_id: str,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_admin),
+    admin: CatequistaOut = Depends(get_current_admin),
 ):
     oid = object_id_or_404(fase_id)
 
@@ -170,6 +180,9 @@ async def apagar_fase(
             detail=f"Não é possível apagar: existem {em_uso} catequisando(s) nesta fase",
         )
 
+    fase = await db.fases.find_one({"_id": oid})
     result = await db.fases.delete_one({"_id": oid})
     if result.deleted_count == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fase não encontrada")
+
+    await registar(db, admin, AcaoAuditoria.APAGAR, "Fase", fase_id, f"Apagou a fase '{fase['nome'] if fase else fase_id}'")

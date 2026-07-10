@@ -15,11 +15,11 @@ class CatequisandoService {
       : _client = ApiClient(token),
         _token = token;
 
-  Future<List<Catequisando>> listar({String? faseId}) async {
-    final data = await _client.get(
-      '/catequisandos',
-      query: faseId != null ? {'fase_id': faseId} : null,
-    ) as List;
+  Future<List<Catequisando>> listar({String? faseId, SituacaoCatequisando? situacao}) async {
+    final query = <String, String>{};
+    if (faseId != null) query['fase_id'] = faseId;
+    if (situacao != null) query['situacao'] = situacao.valor;
+    final data = await _client.get('/catequisandos', query: query.isEmpty ? null : query) as List;
     return data.map((e) => Catequisando.fromJson(e as Map<String, dynamic>)).toList();
   }
 
@@ -34,6 +34,19 @@ class CatequisandoService {
   }
 
   Future<void> apagar(String id) => _client.delete('/catequisandos/$id');
+
+  /// Marca o catequisando como Crismado — mantém o registo e o histórico,
+  /// mas deixa de aparecer nas presenças/pautas ativas da fase.
+  Future<Catequisando> crismar(String id) async {
+    final data = await _client.post('/catequisandos/$id/crismar', {});
+    return Catequisando.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Reverte um catequisando Crismado de volta a Ativo (ex: engano).
+  Future<Catequisando> reativar(String id) async {
+    final data = await _client.post('/catequisandos/$id/reativar', {});
+    return Catequisando.fromJson(data as Map<String, dynamic>);
+  }
 
   /// Descarrega o PDF da lista de catequisandos de uma fase, pronto a imprimir.
   Future<Uint8List> baixarListaPdf(String faseId) =>

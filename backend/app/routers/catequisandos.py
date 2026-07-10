@@ -22,6 +22,7 @@ from app.models.catequisando import (
     CatequisandoUpdate,
     ErroImportacao,
     ImportacaoResultado,
+    SituacaoCatequisando,
 )
 from app.services.pdf_lista_catequisandos import gerar_pdf_lista_catequisandos
 from app.services.pdf_processo_catequisando import gerar_pdf_processo_catequisando
@@ -65,14 +66,18 @@ async def _garantir_nome_unico(db: AsyncIOMotorDatabase, nome: str, ignorar_id: 
 
 def _to_out(doc: dict, fase_nome: str, sector_nome: str | None = None) -> CatequisandoOut:
     data_nasc = doc.get("data_nascimento")
+    data_sit = doc.get("data_situacao")
     return CatequisandoOut(
         id=str(doc["_id"]),
         nome=doc["nome"],
+        genero=doc.get("genero"),
         data_nascimento=data_nasc.date() if data_nasc else None,
         fase_id=doc["fase_id"],
         fase_nome=fase_nome,
         sector_id=doc.get("sector_id"),
         sector_nome=sector_nome,
+        situacao=doc.get("situacao") or SituacaoCatequisando.ATIVO.value,
+        data_situacao=data_sit.date() if data_sit else None,
         encarregado_nome=doc.get("encarregado_nome"),
         encarregado_contacto=doc.get("encarregado_contacto"),
         encarregado_parentesco=doc.get("encarregado_parentesco"),
@@ -94,6 +99,9 @@ async def criar_catequisando(
     doc = dados.model_dump()
     doc["nome"] = doc["nome"].strip()
     doc["nome_normalizado"] = _normalizar_nome(doc["nome"])
+    doc["genero"] = dados.genero.value if dados.genero else None
+    doc["situacao"] = SituacaoCatequisando.ATIVO.value
+    doc["data_situacao"] = None
     doc["criado_em"] = datetime.now(timezone.utc)
     if doc.get("data_nascimento") is not None:
         doc["data_nascimento"] = datetime.combine(doc["data_nascimento"], datetime.min.time())
@@ -119,6 +127,7 @@ async def criar_catequisando(
 async def listar_catequisandos(
     fase_id: str | None = Query(None, description="Filtrar por ID da fase"),
     sector_id: str | None = Query(None, description="Filtrar por ID do sector"),
+    situacao: SituacaoCatequisando | None = Query(None, description="Filtrar por situação (ativo/crismado)"),
     db: AsyncIOMotorDatabase = Depends(get_database),
     _: CatequistaOut = Depends(get_current_catequista),
 ):
@@ -129,6 +138,12 @@ async def listar_catequisandos(
     if sector_id:
         object_id_or_404(sector_id)
         filtro["sector_id"] = sector_id
+    if situacao:
+        if situacao == SituacaoCatequisando.ATIVO:
+            # dados antigos sem o campo 'situacao' contam como ativos
+            filtro["situacao"] = {"$ne": SituacaoCatequisando.CRISMADO.value}
+        else:
+            filtro["situacao"] = situacao.value
 
     fases = {str(f["_id"]): f["nome"] async for f in db.fases.find()}
     sectores = {str(s["_id"]): s["nome"] async for s in db.sectores.find()}
@@ -159,7 +174,11 @@ async def gerar_pdf_lista(
         async for c in db.catequistas.find({"_id": {"$in": oids}}).sort("nome", 1):
             catequistas_nomes.append(c["nome"])
 
-    catequisandos = [doc async for doc in db.catequisandos.find({"fase_id": fase_id}).sort("nome", 1)]
+    catequisandos = [
+        doc async for doc in db.catequisandos.find({
+            "fase_id": fase_id, "situacao": {"$ne": SituacaoCatequisando.CRISMADO.value},
+        }).sort("nome", 1)
+    ]
 
     pdf_bytes = gerar_pdf_lista_catequisandos(fase["nome"], catequistas_nomes, catequisandos)
 
@@ -209,7 +228,7 @@ async def importar_catequisandos(
     fase_id: str = Form(...),
     arquivo: UploadFile = File(...),
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_catequista),
+    catequista: CatequistaOut = Depends(get_current_catequista),
 ):
     """Importa catequisandos a partir de um .xlsx com colunas (nesta ordem):
     Nome | Data de Nascimento | Telefone (contacto do encarregado) | Grau de parentesco.
@@ -268,6 +287,11 @@ async def importar_catequisandos(
         }
         result = await db.catequisandos.insert_one(doc)
         criados += 1
+
+    await registar(
+        db, catequista, AcaoAuditoria.CRIAR, "Catequisando", None,
+        f"Importou {criados} catequisando(s) via Excel na fase '{fase['nome']}'",
+    )
 
     return ImportacaoResultado(total_linhas=total, criados=criados, erros=erros)
 
@@ -371,6 +395,11 @@ async def atualizar_catequisando(
         update_doc["nome"] = update_doc["nome"].strip()
         await _garantir_nome_unico(db, update_doc["nome"], ignorar_id=catequisando_id)
         update_doc["nome_normalizado"] = _normalizar_nome(update_doc["nome"])
+    if "genero" in update_doc and update_doc["genero"] is not None:
+        update_doc["genero"] = dados.genero.value
+    if "situacao" in update_doc and update_doc["situacao"] is not None:
+        update_doc["situacao"] = dados.situacao.value
+        update_doc["data_situacao"] = datetime.now(timezone.utc)
     if "data_nascimento" in update_doc and update_doc["data_nascimento"] is not None:
         update_doc["data_nascimento"] = datetime.combine(update_doc["data_nascimento"], datetime.min.time())
     if "fase_id" in update_doc:
@@ -400,6 +429,65 @@ async def atualizar_catequisando(
         sector_nome = sector["nome"] if sector else None
 
     await registar(db, admin, AcaoAuditoria.ATUALIZAR, "Catequisando", catequisando_id, f"Editou catequisando '{doc['nome']}'")
+
+    return _to_out(doc, fase["nome"] if fase else "Fase desconhecida", sector_nome)
+
+
+@router.post("/{catequisando_id}/crismar", response_model=CatequisandoOut)
+async def crismar_catequisando(
+    catequisando_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    admin: CatequistaOut = Depends(get_current_admin),
+):
+    """Marca o catequisando como Crismado (concluiu o percurso da catequese).
+    Mantém o registo e o histórico — deixa apenas de aparecer nas presenças e
+    pautas ativas da fase, e passa a contar no filtro 'Crismados' da lista."""
+    oid = object_id_or_404(catequisando_id)
+    doc = await db.catequisandos.find_one_and_update(
+        {"_id": oid},
+        {"$set": {
+            "situacao": SituacaoCatequisando.CRISMADO.value,
+            "data_situacao": datetime.now(timezone.utc),
+        }},
+        return_document=ReturnDocument.AFTER,
+    )
+    if doc is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catequisando não encontrado")
+
+    fase = await db.fases.find_one({"_id": object_id_or_404(doc["fase_id"])})
+    sector_nome = None
+    if doc.get("sector_id"):
+        sector = await db.sectores.find_one({"_id": object_id_or_404(doc["sector_id"])})
+        sector_nome = sector["nome"] if sector else None
+
+    await registar(db, admin, AcaoAuditoria.ATUALIZAR, "Catequisando", catequisando_id, f"Marcou '{doc['nome']}' como Crismado(a)")
+
+    return _to_out(doc, fase["nome"] if fase else "Fase desconhecida", sector_nome)
+
+
+@router.post("/{catequisando_id}/reativar", response_model=CatequisandoOut)
+async def reativar_catequisando(
+    catequisando_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    admin: CatequistaOut = Depends(get_current_admin),
+):
+    """Reverte um catequisando marcado como Crismado de volta a Ativo (ex: engano)."""
+    oid = object_id_or_404(catequisando_id)
+    doc = await db.catequisandos.find_one_and_update(
+        {"_id": oid},
+        {"$set": {"situacao": SituacaoCatequisando.ATIVO.value, "data_situacao": datetime.now(timezone.utc)}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if doc is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catequisando não encontrado")
+
+    fase = await db.fases.find_one({"_id": object_id_or_404(doc["fase_id"])})
+    sector_nome = None
+    if doc.get("sector_id"):
+        sector = await db.sectores.find_one({"_id": object_id_or_404(doc["sector_id"])})
+        sector_nome = sector["nome"] if sector else None
+
+    await registar(db, admin, AcaoAuditoria.ATUALIZAR, "Catequisando", catequisando_id, f"Reativou '{doc['nome']}' (deixou de estar Crismado)")
 
     return _to_out(doc, fase["nome"] if fase else "Fase desconhecida", sector_nome)
 

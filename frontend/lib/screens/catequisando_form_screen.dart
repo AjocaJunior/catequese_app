@@ -28,6 +28,7 @@ class _CatequisandoFormScreenState extends State<CatequisandoFormScreen> {
   late TextEditingController _observacoesController;
   String? _faseId;
   String? _sectorId;
+  Genero? _genero;
   List<Sector> _sectoresDisponiveis = [];
   bool _carregandoSectores = true;
   DateTime? _dataNascimento;
@@ -46,6 +47,7 @@ class _CatequisandoFormScreenState extends State<CatequisandoFormScreen> {
     _observacoesController = TextEditingController(text: c?.observacoes ?? '');
     _faseId = c?.faseId ?? (widget.fases.isNotEmpty ? widget.fases.first.id : null);
     _sectorId = c?.sectorId;
+    _genero = c?.genero;
     _dataNascimento = c?.dataNascimento;
   }
 
@@ -105,6 +107,7 @@ class _CatequisandoFormScreenState extends State<CatequisandoFormScreen> {
       'nome': _nomeController.text.trim(),
       'fase_id': _faseId,
       if (_sectorId != null) 'sector_id': _sectorId,
+      if (_genero != null) 'genero': _genero!.valor,
       if (_dataNascimento != null)
         'data_nascimento': _dataNascimento!.toIso8601String().split('T').first,
       if (_encarregadoNomeController.text.trim().isNotEmpty)
@@ -155,6 +158,17 @@ class _CatequisandoFormScreenState extends State<CatequisandoFormScreen> {
                     controller: _nomeController,
                     decoration: const InputDecoration(labelText: 'Nome completo', border: OutlineInputBorder()),
                     validator: (v) => (v == null || v.trim().length < 2) ? 'Nome demasiado curto' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<Genero?>(
+                    value: _genero,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Género (opcional)', border: OutlineInputBorder()),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('Não informado')),
+                      ...Genero.values.map((g) => DropdownMenuItem(value: g, child: Text(g.rotulo))),
+                    ],
+                    onChanged: (v) => setState(() => _genero = v),
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(

@@ -17,6 +17,7 @@ import 'pauta_screen.dart';
 import 'perfil_screen.dart';
 import 'presencas_screen.dart';
 import 'publico_screen.dart';
+import 'relatorios_screen.dart';
 import 'retiros_screen.dart';
 import 'sectores_screen.dart';
 
@@ -239,6 +240,15 @@ class HomeScreen extends StatelessWidget {
                     subtitulo: 'Promover ou remover permissões de administrador',
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const GerirCatequistasScreen()),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _CartaoMenu(
+                    icon: Icons.bar_chart_outlined,
+                    titulo: 'Relatórios',
+                    subtitulo: 'Estatísticas de catequisandos por fase e género',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const RelatoriosScreen()),
                     ),
                   ),
                   const SizedBox(height: 12),

@@ -4,9 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo import ReturnDocument
 
+from app.core.auditoria import registar
 from app.core.database import get_database
 from app.core.deps import get_current_admin, get_current_catequista
 from app.core.mongo_utils import object_id_or_404
+from app.models.auditoria import AcaoAuditoria
 from app.models.catequista import CatequistaOut
 from app.models.evento import EventoCreate, EventoOut, EventoUpdate
 
@@ -28,7 +30,7 @@ def _to_out(doc: dict) -> EventoOut:
 async def criar_evento(
     dados: EventoCreate,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_catequista),
+    catequista: CatequistaOut = Depends(get_current_catequista),
 ):
     doc = {
         "titulo": dados.titulo.strip(),
@@ -39,6 +41,7 @@ async def criar_evento(
     }
     result = await db.eventos.insert_one(doc)
     doc["_id"] = result.inserted_id
+    await registar(db, catequista, AcaoAuditoria.CRIAR, "Evento", str(result.inserted_id), f"Criou o evento '{doc['titulo']}'")
     return _to_out(doc)
 
 
@@ -56,7 +59,7 @@ async def atualizar_evento(
     evento_id: str,
     dados: EventoUpdate,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_catequista),
+    catequista: CatequistaOut = Depends(get_current_catequista),
 ):
     oid = object_id_or_404(evento_id)
     update_doc = dados.model_dump(exclude_unset=True)
@@ -78,6 +81,8 @@ async def atualizar_evento(
     if doc is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evento não encontrado")
 
+    await registar(db, catequista, AcaoAuditoria.ATUALIZAR, "Evento", evento_id, f"Editou o evento '{doc['titulo']}'")
+
     return _to_out(doc)
 
 
@@ -85,9 +90,12 @@ async def atualizar_evento(
 async def apagar_evento(
     evento_id: str,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_admin),
+    admin: CatequistaOut = Depends(get_current_admin),
 ):
     oid = object_id_or_404(evento_id)
+    evento = await db.eventos.find_one({"_id": oid})
     result = await db.eventos.delete_one({"_id": oid})
     if result.deleted_count == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evento não encontrado")
+
+    await registar(db, admin, AcaoAuditoria.APAGAR, "Evento", evento_id, f"Apagou o evento '{evento['titulo'] if evento else evento_id}'")

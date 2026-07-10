@@ -91,7 +91,7 @@ def gerar_pdf_lista_catequisandos(
     col_num = 0.9 * cm
     col_data = 2.3 * cm
     col_contacto = 2.6 * cm
-    col_parentesco = 2.3 * cm
+    col_parentesco = 3.4 * cm
     col_nome = largura_util - col_num - col_data - col_parentesco - col_contacto
 
     tabela = Table(

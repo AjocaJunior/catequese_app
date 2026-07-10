@@ -6,9 +6,11 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from PIL import Image as PILImage
 
+from app.core.auditoria import registar
 from app.core.database import get_database
 from app.core.deps import get_current_admin, get_current_catequista
 from app.core.mongo_utils import object_id_or_404
+from app.models.auditoria import AcaoAuditoria
 from app.models.catequista import CatequistaOut
 from app.models.foto import FotoOut
 
@@ -37,7 +39,7 @@ async def enviar_foto(
     imagem: UploadFile = File(...),
     titulo: str | None = Form(None),
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_catequista),
+    catequista: CatequistaOut = Depends(get_current_catequista),
 ):
     conteudo = await imagem.read()
     try:
@@ -52,6 +54,10 @@ async def enviar_foto(
     }
     result = await db.fotos.insert_one(doc)
     doc["_id"] = result.inserted_id
+    await registar(
+        db, catequista, AcaoAuditoria.CRIAR, "Foto", str(result.inserted_id),
+        f"Enviou uma foto{' (' + doc['titulo'] + ')' if doc['titulo'] else ''} para o carrossel",
+    )
     return foto_to_out(doc)
 
 
@@ -68,9 +74,13 @@ async def listar_fotos(
 async def apagar_foto(
     foto_id: str,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_admin),
+    admin: CatequistaOut = Depends(get_current_admin),
 ):
     oid = object_id_or_404(foto_id)
+    foto = await db.fotos.find_one({"_id": oid}, {"imagem": 0})
     result = await db.fotos.delete_one({"_id": oid})
     if result.deleted_count == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Foto não encontrada")
+
+    titulo = foto.get("titulo") if foto else None
+    await registar(db, admin, AcaoAuditoria.APAGAR, "Foto", foto_id, f"Apagou uma foto{' (' + titulo + ')' if titulo else ''} do carrossel")

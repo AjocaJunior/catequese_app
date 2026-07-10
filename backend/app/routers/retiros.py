@@ -5,9 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo import ReturnDocument
 
+from app.core.auditoria import registar
 from app.core.database import get_database
 from app.core.deps import get_current_admin, get_current_catequista
 from app.core.mongo_utils import object_id_or_404
+from app.models.auditoria import AcaoAuditoria
 from app.models.catequista import CatequistaOut
 from app.models.retiro import (
     FaseResumo,
@@ -75,7 +77,7 @@ async def _to_out(db: AsyncIOMotorDatabase, doc: dict) -> RetiroOut:
 async def criar_retiro(
     dados: RetiroCreate,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_catequista),
+    catequista: CatequistaOut = Depends(get_current_catequista),
 ):
     await _validar_fases(db, dados.fase_ids)
     await _validar_sectores(db, dados.sector_ids)
@@ -93,6 +95,7 @@ async def criar_retiro(
     }
     result = await db.retiros.insert_one(doc)
     doc["_id"] = result.inserted_id
+    await registar(db, catequista, AcaoAuditoria.CRIAR, "Retiro", str(result.inserted_id), f"Criou o retiro '{doc['titulo']}'")
     return await _to_out(db, doc)
 
 
@@ -123,7 +126,7 @@ async def atualizar_retiro(
     retiro_id: str,
     dados: RetiroUpdate,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_catequista),
+    catequista: CatequistaOut = Depends(get_current_catequista),
 ):
     oid = object_id_or_404(retiro_id)
     update_doc = dados.model_dump(exclude_unset=True)
@@ -152,6 +155,8 @@ async def atualizar_retiro(
     if doc is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Retiro não encontrado")
 
+    await registar(db, catequista, AcaoAuditoria.ATUALIZAR, "Retiro", retiro_id, f"Editou o retiro '{doc['titulo']}'")
+
     return await _to_out(db, doc)
 
 
@@ -159,12 +164,15 @@ async def atualizar_retiro(
 async def apagar_retiro(
     retiro_id: str,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_admin),
+    admin: CatequistaOut = Depends(get_current_admin),
 ):
     oid = object_id_or_404(retiro_id)
+    retiro = await db.retiros.find_one({"_id": oid})
     result = await db.retiros.delete_one({"_id": oid})
     if result.deleted_count == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Retiro não encontrado")
+
+    await registar(db, admin, AcaoAuditoria.APAGAR, "Retiro", retiro_id, f"Apagou o retiro '{retiro['titulo'] if retiro else retiro_id}'")
 
 
 @router.get("/{retiro_id}/pdf")

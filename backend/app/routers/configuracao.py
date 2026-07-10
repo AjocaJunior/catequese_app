@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.core.ano_letivo import garantir_atribuicao_catequista, obter_ano_letivo_atual
+from app.core.auditoria import registar
 from app.core.database import get_database
 from app.core.deps import get_current_admin, get_current_catequista
+from app.models.auditoria import AcaoAuditoria
 from app.models.catequista import CatequistaOut
 from app.models.configuracao import AtualizarAnoLetivoRequest, ConfiguracaoOut
 
@@ -22,7 +24,7 @@ async def obter_configuracao(
 async def avancar_ano_letivo(
     dados: AtualizarAnoLetivoRequest,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_admin),
+    admin: CatequistaOut = Depends(get_current_admin),
 ):
     """Avança o ano letivo corrente. As atribuições de catequistas às fases
     são propagadas como ponto de partida do novo ano (continuam iguais até
@@ -55,6 +57,11 @@ async def avancar_ano_letivo(
 
     await db.configuracao.update_one(
         {"_id": "geral"}, {"$set": {"ano_letivo_atual": dados.novo_ano}}, upsert=True
+    )
+
+    await registar(
+        db, admin, AcaoAuditoria.ATUALIZAR, "Configuração", None,
+        f"Avançou o ano letivo de {ano_atual} para {dados.novo_ano}",
     )
 
     return ConfiguracaoOut(ano_letivo_atual=dados.novo_ano)

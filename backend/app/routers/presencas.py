@@ -4,10 +4,12 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from app.core.auditoria import registar
 from app.core.database import get_database
 from app.core.deps import get_current_catequista
 from app.core.mongo_utils import object_id_or_404
 from app.core.permissoes import garantir_acesso_fase
+from app.models.auditoria import AcaoAuditoria
 from app.models.catequista import CatequistaOut
 from app.models.presenca import (
     HistoricoPresencasOut,
@@ -26,7 +28,9 @@ router = APIRouter(prefix="/presencas", tags=["presenças"])
 async def _listar(db: AsyncIOMotorDatabase, fase_id: str, dia: date) -> ListaPresencasOut:
     data_dt = datetime.combine(dia, datetime.min.time())
 
-    catequisandos = [c async for c in db.catequisandos.find({"fase_id": fase_id}).sort("nome", 1)]
+    catequisandos = [
+        c async for c in db.catequisandos.find({"fase_id": fase_id, "situacao": {"$ne": "crismado"}}).sort("nome", 1)
+    ]
     marcadas = {
         p["catequisando_id"]: p["status"]
         async for p in db.presencas.find({"fase_id": fase_id, "data": data_dt})
@@ -70,7 +74,20 @@ async def marcar_presencas(
             upsert=True,
         )
 
-    return await _listar(db, dados.fase_id, dados.data)
+    resultado = await _listar(db, dados.fase_id, dados.data)
+
+    presentes = sum(1 for p in resultado.presencas if p.status == StatusPresenca.PRESENTE)
+    faltas = sum(1 for p in resultado.presencas if p.status == StatusPresenca.FALTA)
+    faltas_just = sum(1 for p in resultado.presencas if p.status == StatusPresenca.FALTA_JUSTIFICADA)
+    fase = await db.fases.find_one({"_id": object_id_or_404(dados.fase_id)})
+
+    await registar(
+        db, catequista, AcaoAuditoria.ATUALIZAR, "Presença", dados.fase_id,
+        f"Marcou presenças de '{fase['nome'] if fase else dados.fase_id}' em {dados.data} "
+        f"({presentes} presença(s), {faltas} falta(s), {faltas_just} justificada(s))",
+    )
+
+    return resultado
 
 
 @router.get("", response_model=ListaPresencasOut)
@@ -99,7 +116,9 @@ async def gerar_relatorio(
         async for c in db.catequistas.find({"_id": {"$in": oids}}).sort("nome", 1):
             catequistas_nomes.append(c["nome"])
 
-    catequisandos = [doc async for doc in db.catequisandos.find({"fase_id": fase_id}).sort("nome", 1)]
+    catequisandos = [
+        doc async for doc in db.catequisandos.find({"fase_id": fase_id, "situacao": {"$ne": "crismado"}}).sort("nome", 1)
+    ]
 
     linhas: list[LinhaRelatorioPresencas] = []
     for c in catequisandos:

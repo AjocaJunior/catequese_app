@@ -4,9 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo import ReturnDocument
 
+from app.core.auditoria import registar
 from app.core.database import get_database
 from app.core.deps import get_current_admin, get_current_catequista
 from app.core.mongo_utils import object_id_or_404
+from app.models.auditoria import AcaoAuditoria
 from app.models.catequista import CatequistaOut
 from app.models.sector import SectorCreate, SectorOut, SectorUpdate
 
@@ -76,6 +78,7 @@ async def criar_sector(
     }
     result = await db.sectores.insert_one(doc)
     doc["_id"] = result.inserted_id
+    await registar(db, catequista, AcaoAuditoria.CRIAR, "Sector", str(result.inserted_id), f"Criou o sector '{doc['nome']}'")
     return await _to_out(db, doc)
 
 
@@ -128,6 +131,8 @@ async def atualizar_sector(
     if doc is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sector não encontrado")
 
+    await registar(db, catequista, AcaoAuditoria.ATUALIZAR, "Sector", sector_id, f"Editou o sector '{doc['nome']}'")
+
     return await _to_out(db, doc)
 
 
@@ -135,9 +140,12 @@ async def atualizar_sector(
 async def apagar_sector(
     sector_id: str,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    _: CatequistaOut = Depends(get_current_admin),
+    admin: CatequistaOut = Depends(get_current_admin),
 ):
     oid = object_id_or_404(sector_id)
+    sector = await db.sectores.find_one({"_id": oid})
     result = await db.sectores.delete_one({"_id": oid})
     if result.deleted_count == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sector não encontrado")
+
+    await registar(db, admin, AcaoAuditoria.APAGAR, "Sector", sector_id, f"Apagou o sector '{sector['nome'] if sector else sector_id}'")
