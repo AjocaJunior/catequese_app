@@ -1,5 +1,6 @@
 import '../models/evento.dart';
 import '../models/foto.dart';
+import '../models/liturgia.dart';
 import '../models/organograma.dart';
 import '../models/retiro_publico.dart';
 import '../models/sector.dart';
@@ -33,5 +34,10 @@ class PublicoService {
   Future<List<Foto>> listarFotos() async {
     final data = await _client.get('/publico/fotos') as List;
     return data.map((e) => Foto.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<LiturgiaDiaria> liturgiaDiaria() async {
+    final data = await _client.get('/publico/liturgia') as Map<String, dynamic>;
+    return LiturgiaDiaria.fromJson(data);
   }
 }

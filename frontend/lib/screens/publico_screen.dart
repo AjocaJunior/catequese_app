@@ -9,6 +9,7 @@ import '../services/publico_service.dart';
 import 'login_screen.dart';
 import 'publico_eventos_screen.dart';
 import 'publico_links_screen.dart';
+import 'publico_liturgia_screen.dart';
 import 'publico_organograma_screen.dart';
 import 'publico_retiros_screen.dart';
 import 'publico_sectores_screen.dart';
@@ -136,6 +137,13 @@ class _PublicoScreenState extends State<PublicoScreen> {
                   mainAxisSpacing: 12,
                   childAspectRatio: 1.05,
                   children: [
+                    _CartaoNav(
+                      icon: Icons.auto_stories_outlined,
+                      titulo: 'Liturgia Diária',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const PublicoLiturgiaScreen()),
+                      ),
+                    ),
                     _CartaoNav(
                       icon: Icons.self_improvement_outlined,
                       titulo: 'Retiros',

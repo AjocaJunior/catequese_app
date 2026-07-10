@@ -94,6 +94,39 @@ class PublicoLinksScreen extends StatelessWidget {
                   onTap: () => _abrirLink(context, 'https://www.assuncaoliberdade.org.mz/'),
                 ),
               ),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.gavel_outlined),
+                  title: const Text('Código do Direito Canónico'),
+                  trailing: const Icon(Icons.open_in_new, size: 18),
+                  onTap: () => _abrirLink(
+                    context,
+                    'https://drive.google.com/file/d/1zAMht8g8h4QyPXpjLlHI4L5QIuULw9WZ/view?usp=sharing',
+                  ),
+                ),
+              ),
+               Card(
+                child: ListTile(
+                  leading: const Icon(Icons.gavel_outlined),
+                  title: const Text('Oremos'),
+                  trailing: const Icon(Icons.open_in_new, size: 18),
+                  onTap: () => _abrirLink(
+                    context,
+                    'https://drive.google.com/file/d/1zIldDOqfjKnVaEaUYzkugia-RLXWtz5S/view?usp=drive_link',
+                  ),
+                ),
+              ),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.map_outlined),
+                  title: const Text('Directório Pastoral'),
+                  trailing: const Icon(Icons.open_in_new, size: 18),
+                  onTap: () => _abrirLink(
+                    context,
+                    'https://drive.google.com/file/d/1tpfLN4K9w0jW2y4ErYJBw87U9fXyiTGR/view?usp=sharing',
+                  ),
+                ),
+              ),
               const SizedBox(height: 24),
             ],
           ),
