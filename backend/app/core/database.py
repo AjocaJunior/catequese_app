@@ -1,10 +1,5 @@
-"""
-Gestão da ligação ao MongoDB (via Motor, driver assíncrono).
-A ligação é criada uma vez no arranque da aplicação (ver main.py -> lifespan)
-e reutilizada em todos os pedidos.
-"""
 import certifi
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from motor.motor_asyncio import AsyncIOMotorClient
 
 from app.core.config import get_settings
 
@@ -12,27 +7,25 @@ settings = get_settings()
 
 
 class MongoDB:
-    client: AsyncIOMotorClient | None = None
-    db: AsyncIOMotorDatabase | None = None
+    client: AsyncIOMotorClient = None
+    db = None
 
 
 mongodb = MongoDB()
 
 
-async def connect_to_mongo() -> None:
-    # tlsCAFile=certifi.where() evita erros de SSL handshake comuns no Windows,
-    # onde a cadeia de certificados do sistema por vezes não é reconhecida corretamente.
-    mongodb.client = AsyncIOMotorClient(
-        settings.MONGODB_URI,
-        tlsCAFile=certifi.where(),
-        serverSelectionTimeoutMS=10000,
-    )
+async def connect_to_mongo():
+    mongodb.client = AsyncIOMotorClient(settings.MONGODB_URI, tlsCAFile=certifi.where())
     mongodb.db = mongodb.client[settings.DB_NAME]
 
 
-async def close_mongo_connection() -> None:
+async def close_mongo_connection():
     if mongodb.client:
         mongodb.client.close()
+
+
+def get_database():
+    return mongodb.db
 
 
 async def _normalizar(nome: str) -> str:
@@ -85,19 +78,15 @@ async def ensure_indexes() -> None:
     await mongodb.db.fotos.create_index("criado_em")
     await mongodb.db.caixa.create_index("data")
     await mongodb.db.caixa.create_index("catequisando_id")
+    await mongodb.db.caixa.create_index([("catequisando_id", 1), ("ano_letivo", 1), ("categoria", 1)])
     await mongodb.db.inventario.create_index("nome")
     await _criar_indice_seguro(
         mongodb.db.atribuicoes_catequista,
         [("catequista_id", 1), ("fase_id", 1), ("ano_letivo", 1)],
         unique=True,
     )
-    await mongodb.db.caixa.create_index([("catequisando_id", 1), ("ano_letivo", 1), ("categoria", 1)])
     await _criar_indice_seguro(mongodb.db.pautas, [("fase_id", 1), ("ano_letivo", 1)], unique=True)
     await mongodb.db.auditoria.create_index("data")
     await mongodb.db.auditoria.create_index("entidade")
     await mongodb.db.auditoria.create_index("catequista_id")
-
-
-def get_database() -> AsyncIOMotorDatabase:
-    """Dependency para usar nos routers: db = Depends(get_database)"""
-    return mongodb.db
+    await mongodb.db.pessoas.create_index("nome")

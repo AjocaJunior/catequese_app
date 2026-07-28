@@ -1,6 +1,5 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
-from zoneinfo import ZoneInfo
 
 import httpx
 from bson import ObjectId
@@ -22,7 +21,7 @@ router = APIRouter(prefix="/publico", tags=["público"])
 
 _LITURGIA_API_URL = "https://api-liturgia-diaria.vercel.app/"
 _LITURGIA_FONTE_URL = "https://sagradaliturgia.com.br/"
-_FUSO_MOCAMBIQUE = ZoneInfo("Africa/Maputo")
+_FUSO_MOCAMBIQUE = timezone(timedelta(hours=2))  # Moçambique: sempre UTC+2, sem horário de verão
 _cache_liturgia: dict[str, LiturgiaDiariaOut] = {}
 
 

@@ -8,6 +8,7 @@ import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/fase_service.dart';
 import '../services/presenca_service.dart';
+import '../utils/partilha_helper.dart';
 
 class PresencasScreen extends StatefulWidget {
   const PresencasScreen({super.key});
@@ -31,6 +32,7 @@ class _PresencasScreenState extends State<PresencasScreen> {
   bool _carregandoPresencas = false;
   bool _guardando = false;
   bool _imprimindoRelatorio = false;
+  bool _partilhandoRelatorio = false;
   String? _erro;
 
   @override
@@ -144,6 +146,29 @@ class _PresencasScreenState extends State<PresencasScreen> {
     }
   }
 
+  Future<void> _partilharRelatorio() async {
+    if (_faseId == null) return;
+    setState(() => _partilhandoRelatorio = true);
+    try {
+      final bytes = await _presencaService.baixarRelatorioPdf(_faseId!);
+      final fasesComEsteId = _fases.where((f) => f.id == _faseId).toList();
+      final faseNome = fasesComEsteId.isNotEmpty ? fasesComEsteId.first.nome : 'fase';
+      if (!mounted) return;
+      await partilharPdf(
+        context,
+        bytes,
+        nomeFicheiro: 'relatorio_presencas_$faseNome.pdf',
+        legenda: 'Relatório de Presenças — $faseNome',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e is ApiException ? e.message : 'Erro ao gerar relatório';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } finally {
+      if (mounted) setState(() => _partilhandoRelatorio = false);
+    }
+  }
+
   String _formatarDataVisual(DateTime d) {
     const diasSemana = {7: 'Domingo', 6: 'Sábado'};
     final dia = diasSemana[d.weekday] ?? '';
@@ -178,6 +203,15 @@ class _PresencasScreenState extends State<PresencasScreen> {
                   : const Icon(Icons.summarize_outlined),
               tooltip: 'Relatório de presenças da fase',
               onPressed: _imprimindoRelatorio ? null : _imprimirRelatorio,
+            ),
+          if (_faseId != null)
+            IconButton(
+              icon: _partilhandoRelatorio
+                  ? const SizedBox(
+                      height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.share_outlined),
+              tooltip: 'Partilhar relatório de presenças',
+              onPressed: _partilhandoRelatorio ? null : _partilharRelatorio,
             ),
         ],
       ),

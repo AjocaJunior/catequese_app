@@ -19,6 +19,8 @@ class InventarioScreen extends StatefulWidget {
 }
 
 class _InventarioScreenState extends State<InventarioScreen> {
+  static const _kGeral = '__geral__';
+
   late InventarioService _service;
   late SectorService _sectorService;
   bool _isAdmin = false;
@@ -27,6 +29,9 @@ class _InventarioScreenState extends State<InventarioScreen> {
   List<ItemInventario> _itens = [];
   bool _loading = true;
   String? _erro;
+  final _pesquisaController = TextEditingController();
+  String _termoPesquisa = '';
+  String? _sectorFiltro;
 
   bool get _podeCriar => _isAdmin || _meusSectores.isNotEmpty;
 
@@ -71,6 +76,23 @@ class _InventarioScreenState extends State<InventarioScreen> {
   List<Sector> get _sectoresDisponiveisParaMim {
     if (_isAdmin) return _sectores;
     return _sectores.where((s) => _meusSectores.any((m) => m.id == s.id)).toList();
+  }
+
+  List<ItemInventario> get _itensFiltrados {
+    var lista = _itens;
+    if (_sectorFiltro == _kGeral) {
+      lista = lista.where((i) => i.sectorId == null).toList();
+    } else if (_sectorFiltro != null) {
+      lista = lista.where((i) => i.sectorId == _sectorFiltro).toList();
+    }
+    if (_termoPesquisa.isNotEmpty) {
+      final termo = _termoPesquisa.toLowerCase();
+      lista = lista.where((i) {
+        return i.nome.toLowerCase().contains(termo) ||
+            (i.descricao?.toLowerCase().contains(termo) ?? false);
+      }).toList();
+    }
+    return lista;
   }
 
   Future<void> _abrirImagem(String url) async {
@@ -286,6 +308,12 @@ class _InventarioScreenState extends State<InventarioScreen> {
   }
 
   @override
+  void dispose() {
+    _pesquisaController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -308,67 +336,119 @@ class _InventarioScreenState extends State<InventarioScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _erro != null
               ? Center(child: Text(_erro!))
-              : RefreshIndicator(
-                  onRefresh: _carregar,
-                  child: _itens.isEmpty
-                      ? ListView(
-                          children: const [
-                            SizedBox(height: 100),
-                            Center(
-                                child: Text('Ainda não há itens no inventário.\nToca em + para adicionar o primeiro.',
-                                    textAlign: TextAlign.center)),
-                          ],
-                        )
-                      : ListView.builder(
-                          itemCount: _itens.length,
-                          itemBuilder: (context, i) {
-                            final item = _itens[i];
-                            final podeGerir = _podeGerir(item);
-                            final detalhes = [
-                              if (item.sectorNome != null) item.sectorNome! else 'Geral',
-                              if (item.categoria != null) item.categoria!,
-                              if (item.localizacao != null) item.localizacao!,
-                              if (item.estado != null) item.estado!.rotulo,
-                            ].join(' · ');
-                            return ListTile(
-                              leading: const CircleAvatar(child: Icon(Icons.inventory_2_outlined)),
-                              title: Text(item.nome),
-                              subtitle: Text(detalhes),
-                              isThreeLine: detalhes.length > 40,
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.blueGrey.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text('${item.quantidade}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  ),
-                                  if (item.imagemUrl != null && item.imagemUrl!.isNotEmpty)
-                                    IconButton(
-                                      icon: const Icon(Icons.image_outlined),
-                                      tooltip: 'Ver imagem',
-                                      onPressed: () => _abrirImagem(item.imagemUrl!),
-                                    ),
-                                  if (podeGerir) ...[
-                                    IconButton(
-                                      icon: const Icon(Icons.edit_outlined),
-                                      tooltip: 'Editar',
-                                      onPressed: () => _mostrarFormulario(item: item),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline),
-                                      tooltip: 'Apagar',
-                                      onPressed: () => _apagar(item),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            );
-                          },
+              : Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      child: TextField(
+                        controller: _pesquisaController,
+                        decoration: InputDecoration(
+                          hintText: 'Pesquisar por nome ou descrição...',
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _termoPesquisa.isEmpty
+                              ? null
+                              : IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    _pesquisaController.clear();
+                                    setState(() => _termoPesquisa = '');
+                                  },
+                                ),
                         ),
+                        onChanged: (v) => setState(() => _termoPesquisa = v),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: DropdownButtonFormField<String?>(
+                        value: _sectorFiltro,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Sector',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text('Todos os sectores')),
+                          const DropdownMenuItem(value: _kGeral, child: Text('Geral (catequese)')),
+                          ..._sectores.map((s) => DropdownMenuItem(value: s.id, child: Text(s.nome))),
+                        ],
+                        onChanged: (v) => setState(() => _sectorFiltro = v),
+                      ),
+                    ),
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: _carregar,
+                        child: _itensFiltrados.isEmpty
+                            ? ListView(
+                                children: [
+                                  const SizedBox(height: 100),
+                                  Center(
+                                    child: Text(
+                                      _itens.isEmpty
+                                          ? 'Ainda não há itens no inventário.\nToca em + para adicionar o primeiro.'
+                                          : 'Nenhum item corresponde à pesquisa/filtro.',
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : ListView.builder(
+                                itemCount: _itensFiltrados.length,
+                                itemBuilder: (context, i) {
+                                  final item = _itensFiltrados[i];
+                                  final podeGerir = _podeGerir(item);
+                                  final detalhes = [
+                                    if (item.sectorNome != null) item.sectorNome! else 'Geral',
+                                    if (item.categoria != null) item.categoria!,
+                                    if (item.localizacao != null) item.localizacao!,
+                                    if (item.estado != null) item.estado!.rotulo,
+                                  ].join(' · ');
+                                  return ListTile(
+                                    leading: const CircleAvatar(child: Icon(Icons.inventory_2_outlined)),
+                                    title: Text(item.nome),
+                                    subtitle: Text(detalhes),
+                                    isThreeLine: detalhes.length > 40,
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.blueGrey.withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(20),
+                                          ),
+                                          child:
+                                              Text('${item.quantidade}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                        ),
+                                        if (item.imagemUrl != null && item.imagemUrl!.isNotEmpty)
+                                          IconButton(
+                                            icon: const Icon(Icons.image_outlined),
+                                            tooltip: 'Ver imagem',
+                                            onPressed: () => _abrirImagem(item.imagemUrl!),
+                                          ),
+                                        if (podeGerir) ...[
+                                          IconButton(
+                                            icon: const Icon(Icons.edit_outlined),
+                                            tooltip: 'Editar',
+                                            onPressed: () => _mostrarFormulario(item: item),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline),
+                                            tooltip: 'Apagar',
+                                            onPressed: () => _apagar(item),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                    ),
+                  ],
                 ),
       floatingActionButton: _podeCriar
           ? FloatingActionButton(

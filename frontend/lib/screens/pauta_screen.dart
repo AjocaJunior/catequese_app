@@ -8,6 +8,7 @@ import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/fase_service.dart';
 import '../services/pauta_service.dart';
+import '../utils/partilha_helper.dart';
 
 class PautaScreen extends StatefulWidget {
   const PautaScreen({super.key});
@@ -30,6 +31,7 @@ class _PautaScreenState extends State<PautaScreen> {
   bool _carregandoPauta = false;
   bool _guardando = false;
   bool _imprimindo = false;
+  bool _partilhando = false;
   String? _erro;
 
   @override
@@ -116,6 +118,27 @@ class _PautaScreenState extends State<PautaScreen> {
     }
   }
 
+  Future<void> _partilhar() async {
+    if (_pauta == null) return;
+    setState(() => _partilhando = true);
+    try {
+      final bytes = await _pautaService.baixarPdf(faseId: _pauta!.faseId);
+      if (!mounted) return;
+      await partilharPdf(
+        context,
+        bytes,
+        nomeFicheiro: 'pauta_${_pauta!.faseNome}.pdf',
+        legenda: 'Pauta — ${_pauta!.faseNome}',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e is ApiException ? e.message : 'Erro ao gerar PDF';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } finally {
+      if (mounted) setState(() => _partilhando = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
@@ -133,6 +156,15 @@ class _PautaScreenState extends State<PautaScreen> {
                   : const Icon(Icons.print_outlined),
               tooltip: 'Imprimir pauta',
               onPressed: _imprimindo ? null : _imprimir,
+            ),
+          if (_pauta != null)
+            IconButton(
+              icon: _partilhando
+                  ? const SizedBox(
+                      height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.share_outlined),
+              tooltip: 'Partilhar pauta',
+              onPressed: _partilhando ? null : _partilhar,
             ),
         ],
       ),

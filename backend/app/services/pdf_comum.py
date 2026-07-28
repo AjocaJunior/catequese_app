@@ -150,3 +150,39 @@ def bloco_assinatura(estilos: dict, cargo: str = "Coordenador(a) da Catequese") 
         Spacer(1, 28),
         Paragraph("Data: _____ / _____ / ________", estilos["assinatura"]),
     ]
+
+
+_MESES_EXTENSO = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+]
+
+
+def formatar_data_extenso(dia) -> str:
+    """'09 de Janeiro de 2011' — o formato usado nos documentos formais
+    (guias de transferência, etc.), em vez do DD/MM/AAAA numérico."""
+    if dia is None:
+        return "—"
+    return f"{dia.day:02d} de {_MESES_EXTENSO[dia.month - 1]} de {dia.year}"
+
+
+def bloco_assinatura_dupla(estilos: dict, largura_total: float, cargo1: str, cargo2: str) -> list:
+    """Duas linhas de assinatura lado a lado (ex: Coordenador + Pároco),
+    para documentos que precisam de ambas, como a Guia de Transferência."""
+    largura_col = largura_total / 2
+    tabela = Table(
+        [[
+            Paragraph("_______________________________", estilos["assinatura"]),
+            Paragraph("_______________________________", estilos["assinatura"]),
+        ], [
+            Paragraph(cargo1, estilos["assinatura"]),
+            Paragraph(cargo2, estilos["assinatura"]),
+        ]],
+        colWidths=[largura_col, largura_col],
+    )
+    tabela.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
+    return [Spacer(1, 46), tabela]

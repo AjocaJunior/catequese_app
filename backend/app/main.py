@@ -4,27 +4,45 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.core.database import connect_to_mongo, close_mongo_connection, ensure_indexes
-from app.routers import health, auth, fases, catequisandos, catequistas, presencas, retiros, eventos, sectores, publico, ministerios, fotos, caixa, inventario, configuracao, pautas, auditoria, relatorios
+from app.core.database import close_mongo_connection, connect_to_mongo, ensure_indexes
+from app.routers import (
+    health,
+    auth,
+    fases,
+    catequisandos,
+    catequistas,
+    presencas,
+    retiros,
+    eventos,
+    sectores,
+    publico,
+    ministerios,
+    fotos,
+    caixa,
+    inventario,
+    configuracao,
+    pautas,
+    auditoria,
+    relatorios,
+    pessoas,
+)
 
 settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Executado no arranque
     await connect_to_mongo()
     await ensure_indexes()
     yield
-    # Executado no encerramento
     await close_mongo_connection()
 
 
-app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
+app = FastAPI(title="Gestão Catequética", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=[settings.CORS_ORIGINS] if settings.CORS_ORIGINS != "*" else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,9 +65,5 @@ app.include_router(configuracao.router)
 app.include_router(pautas.router)
 app.include_router(auditoria.router)
 app.include_router(relatorios.router)
+app.include_router(pessoas.router)
 app.include_router(publico.router)
-
-
-@app.get("/")
-async def root():
-    return {"message": f"{settings.APP_NAME} está no ar."}

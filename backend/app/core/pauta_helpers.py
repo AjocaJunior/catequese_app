@@ -18,7 +18,7 @@ async def montar_pauta(db: AsyncIOMotorDatabase, fase: dict, ano_letivo: int) ->
     situacoes_guardadas = pauta_doc.get("situacoes", {}) if pauta_doc else {}
 
     itens: list[ItemPautaOut] = []
-    async for c in db.catequisandos.find({"fase_id": fase_id, "situacao": {"$ne": "crismado"}}).sort("nome", 1):
+    async for c in db.catequisandos.find({"fase_id": fase_id, "situacao": {"$nin": ["crismado", "transferido"]}}).sort("nome", 1):
         catequisando_id = str(c["_id"])
         presencas = 0
         faltas = 0

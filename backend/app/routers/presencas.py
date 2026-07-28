@@ -29,7 +29,7 @@ async def _listar(db: AsyncIOMotorDatabase, fase_id: str, dia: date) -> ListaPre
     data_dt = datetime.combine(dia, datetime.min.time())
 
     catequisandos = [
-        c async for c in db.catequisandos.find({"fase_id": fase_id, "situacao": {"$ne": "crismado"}}).sort("nome", 1)
+        c async for c in db.catequisandos.find({"fase_id": fase_id, "situacao": {"$nin": ["crismado", "transferido"]}}).sort("nome", 1)
     ]
     marcadas = {
         p["catequisando_id"]: p["status"]
@@ -117,7 +117,7 @@ async def gerar_relatorio(
             catequistas_nomes.append(c["nome"])
 
     catequisandos = [
-        doc async for doc in db.catequisandos.find({"fase_id": fase_id, "situacao": {"$ne": "crismado"}}).sort("nome", 1)
+        doc async for doc in db.catequisandos.find({"fase_id": fase_id, "situacao": {"$nin": ["crismado", "transferido"]}}).sort("nome", 1)
     ]
 
     linhas: list[LinhaRelatorioPresencas] = []

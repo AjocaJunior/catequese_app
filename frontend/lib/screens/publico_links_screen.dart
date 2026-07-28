@@ -107,7 +107,7 @@ class PublicoLinksScreen extends StatelessWidget {
               ),
                Card(
                 child: ListTile(
-                  leading: const Icon(Icons.gavel_outlined),
+                  leading: const Icon(Icons.volunteer_activism_outlined),
                   title: const Text('Oremos'),
                   trailing: const Icon(Icons.open_in_new, size: 18),
                   onTap: () => _abrirLink(

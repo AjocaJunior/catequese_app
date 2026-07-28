@@ -6,6 +6,7 @@ import '../models/retiro.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/retiro_service.dart';
+import '../utils/partilha_helper.dart';
 import 'retiro_form_screen.dart';
 
 class RetirosScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class _RetirosScreenState extends State<RetirosScreen> {
   bool _loading = true;
   String? _erro;
   String? _aImprimirId;
+  String? _aPartilharId;
 
   @override
   void didChangeDependencies() {
@@ -67,6 +69,26 @@ class _RetirosScreenState extends State<RetirosScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } finally {
       if (mounted) setState(() => _aImprimirId = null);
+    }
+  }
+
+  Future<void> _partilhar(Retiro retiro) async {
+    setState(() => _aPartilharId = retiro.id);
+    try {
+      final bytes = await _service.baixarPdf(retiro.id);
+      if (!mounted) return;
+      await partilharPdf(
+        context,
+        bytes,
+        nomeFicheiro: 'retiro_${retiro.titulo.replaceAll(' ', '_')}.pdf',
+        legenda: 'Retiro: ${retiro.titulo}',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e is ApiException ? e.message : 'Erro ao gerar PDF';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } finally {
+      if (mounted) setState(() => _aPartilharId = null);
     }
   }
 
@@ -147,6 +169,17 @@ class _RetirosScreenState extends State<RetirosScreen> {
                                         : const Icon(Icons.print_outlined),
                                     tooltip: 'Imprimir / exportar PDF',
                                     onPressed: _aImprimirId == null ? () => _imprimir(r) : null,
+                                  ),
+                                  IconButton(
+                                    icon: _aPartilharId == r.id
+                                        ? const SizedBox(
+                                            height: 18,
+                                            width: 18,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          )
+                                        : const Icon(Icons.share_outlined),
+                                    tooltip: 'Partilhar',
+                                    onPressed: _aPartilharId == null ? () => _partilhar(r) : null,
                                   ),
                                   if (_isAdmin)
                                     IconButton(

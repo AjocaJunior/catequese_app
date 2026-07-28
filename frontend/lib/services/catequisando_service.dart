@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../models/catequisando.dart';
-import '../models/historico_inscricao.dart';
 import 'api_client.dart';
 
 class CatequisandoService {
@@ -21,6 +20,11 @@ class CatequisandoService {
     if (situacao != null) query['situacao'] = situacao.valor;
     final data = await _client.get('/catequisandos', query: query.isEmpty ? null : query) as List;
     return data.map((e) => Catequisando.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<Catequisando> obter(String id) async {
+    final data = await _client.get('/catequisandos/$id') as Map<String, dynamic>;
+    return Catequisando.fromJson(data);
   }
 
   Future<Catequisando> criar(Map<String, dynamic> dados) async {
@@ -48,23 +52,6 @@ class CatequisandoService {
     return Catequisando.fromJson(data as Map<String, dynamic>);
   }
 
-  /// Descarrega o PDF da lista de catequisandos de uma fase, pronto a imprimir.
-  Future<Uint8List> baixarListaPdf(String faseId) =>
-      _client.getBytes('/catequisandos/pdf?fase_id=$faseId');
-
-  /// Descarrega o PDF do processo individual (dados + histórico de presenças).
-  Future<Uint8List> baixarProcessoPdf(String catequisandoId) =>
-      _client.getBytes('/catequisandos/$catequisandoId/pdf');
-
-  /// Histórico de fase por ano letivo, derivado das inscrições/renovações
-  /// já registadas na Caixa para este catequisando.
-  Future<List<HistoricoInscricao>> historico(String catequisandoId) async {
-    final data = await _client.get('/catequisandos/$catequisandoId/historico') as List;
-    return data.map((e) => HistoricoInscricao.fromJson(e as Map<String, dynamic>)).toList();
-  }
-
-  /// Importa catequisandos a partir de um ficheiro .xlsx.
-  /// [bytes] deve ser o conteúdo binário do ficheiro escolhido pelo utilizador.
   Future<ImportacaoResultado> importar({
     required String faseId,
     required Uint8List bytes,
@@ -91,5 +78,56 @@ class CatequisandoService {
       if (corpo is Map && corpo['detail'] != null) mensagem = corpo['detail'].toString();
     } catch (_) {}
     throw ApiException(mensagem, resposta.statusCode);
+  }
+
+  /// Descarrega o PDF da Ficha do Catecúmeno.
+  Future<Uint8List> baixarProcessoPdf(String catequisandoId) =>
+      _client.getBytes('/catequisandos/$catequisandoId/pdf');
+
+  /// Descarrega o PDF da lista de catequisandos de uma fase.
+  Future<Uint8List> baixarListaPdf(String faseId) =>
+      _client.getBytes('/catequisandos/pdf?fase_id=$faseId');
+
+  /// Regista a transferência para outra paróquia/comunidade — mantém o
+  /// registo e o histórico, mas deixa de aparecer nas presenças/pautas
+  /// ativas da fase, tal como um Crismado.
+  Future<Catequisando> transferir(
+    String id, {
+    required String numero,
+    required int anoGuia,
+    required int anoFrequentado,
+    required String destinoComunidade,
+    required String destinoArquidiocese,
+    String? observacao,
+    DateTime? dataImpressao,
+  }) async {
+    final data = await _client.post('/catequisandos/$id/transferir', {
+      'numero': numero,
+      'ano_guia': anoGuia,
+      'ano_frequentado': anoFrequentado,
+      'destino_comunidade': destinoComunidade,
+      'destino_arquidiocese': destinoArquidiocese,
+      if (observacao != null && observacao.isNotEmpty) 'observacao': observacao,
+      if (dataImpressao != null)
+        'data_impressao':
+            '${dataImpressao.year.toString().padLeft(4, '0')}-${dataImpressao.month.toString().padLeft(2, '0')}-${dataImpressao.day.toString().padLeft(2, '0')}',
+    });
+    return Catequisando.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Descarrega o PDF da Guia de Transferência (só depois de transferir).
+  Future<Uint8List> baixarGuiaTransferenciaPdf(String catequisandoId) =>
+      _client.getBytes('/catequisandos/$catequisandoId/transferencia/pdf');
+
+  /// Descarrega a Ficha de Baptismo, 1ª Comunhão ou Crisma.
+  /// [tipo] deve ser 'baptismo', 'primeira_comunhao' ou 'crisma'.
+  Future<Uint8List> baixarFichaSacramentoPdf(String catequisandoId, String tipo) =>
+      _client.getBytes('/catequisandos/$catequisandoId/ficha-sacramento/pdf?tipo=$tipo');
+
+  /// Histórico de fase por ano letivo, derivado das inscrições/renovações
+  /// já registadas na Caixa para este catequisando.
+  Future<List<Map<String, dynamic>>> historico(String catequisandoId) async {
+    final data = await _client.get('/catequisandos/$catequisandoId/historico') as List;
+    return data.cast<Map<String, dynamic>>();
   }
 }

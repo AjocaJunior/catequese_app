@@ -188,6 +188,176 @@ class _CatequisandosScreenState extends State<CatequisandosScreen> {
     }
   }
 
+  Future<void> _mostrarFormularioTransferencia(Catequisando c) async {
+    final numeroController = TextEditingController(text: c.transferenciaNumero ?? '');
+    final anoGuiaController = TextEditingController(
+      text: (c.transferenciaAnoGuia ?? DateTime.now().year).toString(),
+    );
+    final anoFrequentadoController = TextEditingController(
+      text: (c.transferenciaAnoFrequentado ?? DateTime.now().year).toString(),
+    );
+    final destinoComunidadeController = TextEditingController(text: c.transferenciaDestinoComunidade ?? '');
+    final destinoArquidioceseController = TextEditingController(text: c.transferenciaDestinoArquidiocese ?? 'Maputo');
+    final observacaoController = TextEditingController(text: c.transferenciaObservacao ?? '');
+    DateTime dataImpressao = c.transferenciaData ?? DateTime.now();
+    final formKey = GlobalKey<FormState>();
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) => AlertDialog(
+          title: Text('Transferir ${c.nome}'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Gera a Guia de Transferência e marca o catequisando como Transferido '
+                      '(deixa de aparecer nas presenças e pautas ativas).',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: numeroController,
+                            decoration: const InputDecoration(labelText: 'Nº da guia', border: OutlineInputBorder()),
+                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obrigatório' : null,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: anoGuiaController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'Ano da guia', border: OutlineInputBorder()),
+                            validator: (v) => (int.tryParse(v ?? '') == null) ? 'Ano inválido' : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: anoFrequentadoController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Ano em que frequentou nesta paróquia',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) => (int.tryParse(v ?? '') == null) ? 'Ano inválido' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: destinoComunidadeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Paróquia/Comunidade de destino',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) => (v == null || v.trim().length < 2) ? 'Obrigatório' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: destinoArquidioceseController,
+                      decoration: const InputDecoration(labelText: 'Arquidiocese de destino', border: OutlineInputBorder()),
+                      validator: (v) => (v == null || v.trim().length < 2) ? 'Obrigatório' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: () async {
+                        final escolhida = await showDatePicker(
+                          context: context,
+                          initialDate: dataImpressao,
+                          firstDate: DateTime.now().subtract(const Duration(days: 3650)),
+                          lastDate: DateTime.now().add(const Duration(days: 30)),
+                        );
+                        if (escolhida != null) setStateDialog(() => dataImpressao = escolhida);
+                      },
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Data de impressão',
+                          border: OutlineInputBorder(),
+                          suffixIcon: Icon(Icons.calendar_today_outlined, size: 18),
+                        ),
+                        child: Text(
+                          '${dataImpressao.day.toString().padLeft(2, '0')}/${dataImpressao.month.toString().padLeft(2, '0')}/${dataImpressao.year}',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: observacaoController,
+                      maxLines: 2,
+                      decoration: const InputDecoration(labelText: 'NB (observação, opcional)', border: OutlineInputBorder()),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) Navigator.pop(context, true);
+              },
+              child: const Text('Transferir'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmar != true) return;
+
+    try {
+      await _catequisandoService.transferir(
+        c.id,
+        numero: numeroController.text.trim(),
+        anoGuia: int.parse(anoGuiaController.text.trim()),
+        anoFrequentado: int.parse(anoFrequentadoController.text.trim()),
+        destinoComunidade: destinoComunidadeController.text.trim(),
+        destinoArquidiocese: destinoArquidioceseController.text.trim(),
+        observacao: observacaoController.text.trim(),
+        dataImpressao: dataImpressao,
+      );
+      if (!mounted) return;
+      _carregar();
+
+      final imprimir = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Transferência registada'),
+          content: const Text('Queres imprimir a Guia de Transferência agora?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Mais tarde')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Imprimir')),
+          ],
+        ),
+      );
+      if (imprimir == true) await _imprimirGuiaTransferencia(c);
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e is ApiException ? e.message : 'Erro ao transferir';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
+  Future<void> _imprimirGuiaTransferencia(Catequisando c) async {
+    try {
+      final bytes = await _catequisandoService.baixarGuiaTransferenciaPdf(c.id);
+      await Printing.layoutPdf(onLayout: (_) async => bytes);
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e is ApiException ? e.message : 'Erro ao gerar a guia';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
   Future<void> _abrirFormulario({Catequisando? catequisando}) async {
     if (_fases.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -301,6 +471,14 @@ class _CatequisandosScreenState extends State<CatequisandosScreen> {
                   },
                 ),
                 ChoiceChip(
+                  label: const Text('Transferidos'),
+                  selected: _situacaoFiltro == SituacaoCatequisando.transferido,
+                  onSelected: (_) {
+                    setState(() => _situacaoFiltro = SituacaoCatequisando.transferido);
+                    _carregar();
+                  },
+                ),
+                ChoiceChip(
                   label: const Text('Todos'),
                   selected: _situacaoFiltro == null,
                   onSelected: (_) {
@@ -357,13 +535,28 @@ class _CatequisandosScreenState extends State<CatequisandosScreen> {
                   itemBuilder: (context, i) {
                     final c = _catequisandosFiltrados[i];
                     final eCrismado = c.situacao == SituacaoCatequisando.crismado;
+                    final eTransferido = c.situacao == SituacaoCatequisando.transferido;
                     return ListTile(
                       leading: CircleAvatar(
-                        backgroundColor: eCrismado ? Colors.amber.withValues(alpha: 0.2) : null,
-                        child: Icon(eCrismado ? Icons.workspace_premium_outlined : Icons.person_outline),
+                        backgroundColor: eCrismado
+                            ? Colors.amber.withValues(alpha: 0.2)
+                            : eTransferido
+                                ? Colors.blueGrey.withValues(alpha: 0.2)
+                                : null,
+                        child: Icon(eCrismado
+                            ? Icons.workspace_premium_outlined
+                            : eTransferido
+                                ? Icons.moving_outlined
+                                : Icons.person_outline),
                       ),
                       title: Text(c.nome),
-                      subtitle: Text(eCrismado ? '${c.faseNome} · Crismado' : c.faseNome),
+                      subtitle: Text(
+                        eCrismado
+                            ? '${c.faseNome} · Crismado'
+                            : eTransferido
+                                ? '${c.faseNome} · Transferido para ${c.transferenciaDestinoComunidade ?? "—"}'
+                                : c.faseNome,
+                      ),
                       trailing: isAdmin
                           ? Row(
                               mainAxisSize: MainAxisSize.min,
@@ -372,6 +565,13 @@ class _CatequisandosScreenState extends State<CatequisandosScreen> {
                                   icon: Icon(eCrismado ? Icons.undo : Icons.workspace_premium_outlined),
                                   tooltip: eCrismado ? 'Reativar' : 'Marcar como Crismado',
                                   onPressed: () => _alternarCrismado(c),
+                                ),
+                                IconButton(
+                                  icon: Icon(eTransferido ? Icons.print_outlined : Icons.moving_outlined),
+                                  tooltip: eTransferido ? 'Imprimir Guia de Transferência' : 'Transferir',
+                                  onPressed: () => eTransferido
+                                      ? _imprimirGuiaTransferencia(c)
+                                      : _mostrarFormularioTransferencia(c),
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.swap_horiz),
