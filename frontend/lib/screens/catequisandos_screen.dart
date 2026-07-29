@@ -549,44 +549,82 @@ class _CatequisandosScreenState extends State<CatequisandosScreen> {
                                 ? Icons.moving_outlined
                                 : Icons.person_outline),
                       ),
-                      title: Text(c.nome),
+                      title: Text(c.nome, maxLines: 1, overflow: TextOverflow.ellipsis),
                       subtitle: Text(
                         eCrismado
                             ? '${c.faseNome} · Crismado'
                             : eTransferido
                                 ? '${c.faseNome} · Transferido para ${c.transferenciaDestinoComunidade ?? "—"}'
                                 : c.faseNome,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       trailing: isAdmin
-                          ? Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: Icon(eCrismado ? Icons.undo : Icons.workspace_premium_outlined),
-                                  tooltip: eCrismado ? 'Reativar' : 'Marcar como Crismado',
-                                  onPressed: () => _alternarCrismado(c),
+                          ? PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert),
+                              onSelected: (valor) {
+                                switch (valor) {
+                                  case 'crismar':
+                                  case 'reativar':
+                                    _alternarCrismado(c);
+                                    break;
+                                  case 'transferir':
+                                    _mostrarFormularioTransferencia(c);
+                                    break;
+                                  case 'guia':
+                                    _imprimirGuiaTransferencia(c);
+                                    break;
+                                  case 'fase':
+                                    _mudarFase(c);
+                                    break;
+                                  case 'editar':
+                                    _abrirFormulario(catequisando: c);
+                                    break;
+                                  case 'apagar':
+                                    _apagar(c);
+                                    break;
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                PopupMenuItem(
+                                  value: eCrismado ? 'reativar' : 'crismar',
+                                  child: ListTile(
+                                    leading: Icon(eCrismado ? Icons.undo : Icons.workspace_premium_outlined),
+                                    title: Text(eCrismado ? 'Reativar' : 'Marcar como Crismado'),
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
                                 ),
-                                IconButton(
-                                  icon: Icon(eTransferido ? Icons.print_outlined : Icons.moving_outlined),
-                                  tooltip: eTransferido ? 'Imprimir Guia de Transferência' : 'Transferir',
-                                  onPressed: () => eTransferido
-                                      ? _imprimirGuiaTransferencia(c)
-                                      : _mostrarFormularioTransferencia(c),
+                                PopupMenuItem(
+                                  value: eTransferido ? 'guia' : 'transferir',
+                                  child: ListTile(
+                                    leading: Icon(eTransferido ? Icons.print_outlined : Icons.moving_outlined),
+                                    title: Text(eTransferido ? 'Imprimir Guia de Transferência' : 'Transferir'),
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.swap_horiz),
-                                  tooltip: 'Mudar de fase',
-                                  onPressed: () => _mudarFase(c),
+                                const PopupMenuItem(
+                                  value: 'fase',
+                                  child: ListTile(
+                                    leading: Icon(Icons.swap_horiz),
+                                    title: Text('Mudar de fase'),
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.edit_outlined),
-                                  tooltip: 'Editar',
-                                  onPressed: () => _abrirFormulario(catequisando: c),
+                                const PopupMenuItem(
+                                  value: 'editar',
+                                  child: ListTile(
+                                    leading: Icon(Icons.edit_outlined),
+                                    title: Text('Editar'),
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline),
-                                  tooltip: 'Apagar',
-                                  onPressed: () => _apagar(c),
+                                const PopupMenuItem(
+                                  value: 'apagar',
+                                  child: ListTile(
+                                    leading: Icon(Icons.delete_outline),
+                                    title: Text('Apagar'),
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
                                 ),
                               ],
                             )

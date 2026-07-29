@@ -408,9 +408,8 @@ class _InventarioScreenState extends State<InventarioScreen> {
                                   ].join(' · ');
                                   return ListTile(
                                     leading: const CircleAvatar(child: Icon(Icons.inventory_2_outlined)),
-                                    title: Text(item.nome),
-                                    subtitle: Text(detalhes),
-                                    isThreeLine: detalhes.length > 40,
+                                    title: Text(item.nome, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    subtitle: Text(detalhes, maxLines: 2, overflow: TextOverflow.ellipsis),
                                     trailing: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
@@ -423,24 +422,52 @@ class _InventarioScreenState extends State<InventarioScreen> {
                                           child:
                                               Text('${item.quantidade}', style: const TextStyle(fontWeight: FontWeight.bold)),
                                         ),
-                                        if (item.imagemUrl != null && item.imagemUrl!.isNotEmpty)
-                                          IconButton(
-                                            icon: const Icon(Icons.image_outlined),
-                                            tooltip: 'Ver imagem',
-                                            onPressed: () => _abrirImagem(item.imagemUrl!),
+                                        if ((item.imagemUrl != null && item.imagemUrl!.isNotEmpty) || podeGerir)
+                                          PopupMenuButton<String>(
+                                            icon: const Icon(Icons.more_vert),
+                                            onSelected: (valor) {
+                                              switch (valor) {
+                                                case 'imagem':
+                                                  _abrirImagem(item.imagemUrl!);
+                                                  break;
+                                                case 'editar':
+                                                  _mostrarFormulario(item: item);
+                                                  break;
+                                                case 'apagar':
+                                                  _apagar(item);
+                                                  break;
+                                              }
+                                            },
+                                            itemBuilder: (context) => [
+                                              if (item.imagemUrl != null && item.imagemUrl!.isNotEmpty)
+                                                const PopupMenuItem(
+                                                  value: 'imagem',
+                                                  child: ListTile(
+                                                    leading: Icon(Icons.image_outlined),
+                                                    title: Text('Ver imagem'),
+                                                    contentPadding: EdgeInsets.zero,
+                                                  ),
+                                                ),
+                                              if (podeGerir) ...[
+                                                const PopupMenuItem(
+                                                  value: 'editar',
+                                                  child: ListTile(
+                                                    leading: Icon(Icons.edit_outlined),
+                                                    title: Text('Editar'),
+                                                    contentPadding: EdgeInsets.zero,
+                                                  ),
+                                                ),
+                                                const PopupMenuItem(
+                                                  value: 'apagar',
+                                                  child: ListTile(
+                                                    leading: Icon(Icons.delete_outline),
+                                                    title: Text('Apagar'),
+                                                    contentPadding: EdgeInsets.zero,
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
                                           ),
-                                        if (podeGerir) ...[
-                                          IconButton(
-                                            icon: const Icon(Icons.edit_outlined),
-                                            tooltip: 'Editar',
-                                            onPressed: () => _mostrarFormulario(item: item),
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.delete_outline),
-                                            tooltip: 'Apagar',
-                                            onPressed: () => _apagar(item),
-                                          ),
-                                        ],
                                       ],
                                     ),
                                   );

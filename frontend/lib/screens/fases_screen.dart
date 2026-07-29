@@ -318,33 +318,60 @@ class _FasesScreenState extends State<FasesScreen> {
                             ].join(' · ');
                             return ListTile(
                               leading: CircleAvatar(child: Text('${fase.ordem}')),
-                              title: Text(fase.nome),
-                              subtitle: Text(detalhes),
-                              isThreeLine: detalhes.length > 40,
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
+                              title: Text(fase.nome, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              subtitle: Text(detalhes, maxLines: 2, overflow: TextOverflow.ellipsis),
+                              trailing: PopupMenuButton<String>(
+                                icon: const Icon(Icons.more_vert),
+                                onSelected: (valor) {
+                                  switch (valor) {
+                                    case 'programa':
+                                      _abrirPrograma(fase);
+                                      break;
+                                    case 'catequistas':
+                                      _gerirCatequistasDaFase(fase);
+                                      break;
+                                    case 'editar':
+                                      _mostrarFormulario(fase: fase);
+                                      break;
+                                    case 'apagar':
+                                      _apagar(fase);
+                                      break;
+                                  }
+                                },
+                                itemBuilder: (context) => [
                                   if (fase.programaPdfUrl != null && fase.programaPdfUrl!.isNotEmpty)
-                                    IconButton(
-                                      icon: const Icon(Icons.picture_as_pdf_outlined),
-                                      tooltip: 'Abrir programa (PDF)',
-                                      onPressed: () => _abrirPrograma(fase),
+                                    const PopupMenuItem(
+                                      value: 'programa',
+                                      child: ListTile(
+                                        leading: Icon(Icons.picture_as_pdf_outlined),
+                                        title: Text('Abrir programa (PDF)'),
+                                        contentPadding: EdgeInsets.zero,
+                                      ),
                                     ),
                                   if (_isAdmin) ...[
-                                    IconButton(
-                                      icon: const Icon(Icons.group_outlined),
-                                      tooltip: 'Catequistas da fase',
-                                      onPressed: () => _gerirCatequistasDaFase(fase),
+                                    const PopupMenuItem(
+                                      value: 'catequistas',
+                                      child: ListTile(
+                                        leading: Icon(Icons.group_outlined),
+                                        title: Text('Catequistas da fase'),
+                                        contentPadding: EdgeInsets.zero,
+                                      ),
                                     ),
-                                    IconButton(
-                                      icon: const Icon(Icons.edit_outlined),
-                                      tooltip: 'Editar',
-                                      onPressed: () => _mostrarFormulario(fase: fase),
+                                    const PopupMenuItem(
+                                      value: 'editar',
+                                      child: ListTile(
+                                        leading: Icon(Icons.edit_outlined),
+                                        title: Text('Editar'),
+                                        contentPadding: EdgeInsets.zero,
+                                      ),
                                     ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline),
-                                      tooltip: 'Apagar',
-                                      onPressed: () => _apagar(fase),
+                                    const PopupMenuItem(
+                                      value: 'apagar',
+                                      child: ListTile(
+                                        leading: Icon(Icons.delete_outline),
+                                        title: Text('Apagar'),
+                                        contentPadding: EdgeInsets.zero,
+                                      ),
                                     ),
                                   ],
                                 ],

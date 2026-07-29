@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -285,14 +286,12 @@ class _CarrosselFotosState extends State<_CarrosselFotos> {
                 return Stack(
                   fit: StackFit.expand,
                   children: [
-                    Image.network(
-                      foto.urlImagem,
+                    CachedNetworkImage(
+                      imageUrl: foto.urlImagem,
                       fit: BoxFit.cover,
-                      loadingBuilder: (context, child, progress) {
-                        if (progress == null) return child;
-                        return const Center(child: CircularProgressIndicator());
-                      },
-                      errorBuilder: (context, error, stack) => Container(
+                      fadeInDuration: const Duration(milliseconds: 200),
+                      placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                      errorWidget: (context, url, error) => Container(
                         color: Colors.grey.shade300,
                         child: const Icon(Icons.broken_image_outlined, size: 48, color: Colors.grey),
                       ),

@@ -85,7 +85,9 @@ async def listar_sectores_publico(db: AsyncIOMotorDatabase = Depends(get_databas
 
 @router.get("/fotos", response_model=list[FotoOut])
 async def listar_fotos_publico(db: AsyncIOMotorDatabase = Depends(get_database)):
-    cursor = db.fotos.find({}, {"imagem": 0}).sort("criado_em", -1)
+    # Limitado às mais recentes — o carrossel não precisa do histórico completo,
+    # e isto evita que a lista cresça sem fim à medida que se vão adicionando fotos.
+    cursor = db.fotos.find({}, {"imagem": 0}).sort("criado_em", -1).limit(20)
     return [foto_to_out(doc) async for doc in cursor]
 
 
@@ -95,7 +97,17 @@ async def obter_imagem_publico(foto_id: str, db: AsyncIOMotorDatabase = Depends(
     doc = await db.fotos.find_one({"_id": oid})
     if doc is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Foto não encontrada")
-    return Response(content=bytes(doc["imagem"]), media_type="image/jpeg")
+    return Response(
+        content=bytes(doc["imagem"]),
+        media_type="image/jpeg",
+        headers={
+            # O conteúdo de uma foto com este ID nunca muda (apagar cria sempre
+            # um ID novo), por isso o browser/app pode guardá-la "para sempre"
+            # em vez de a descarregar de novo em cada visita.
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "ETag": foto_id,
+        },
+    )
 
 
 @router.get("/organograma", response_model=OrganogramaOut)
