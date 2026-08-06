@@ -174,14 +174,15 @@ async def criar_catequisando(
     db: AsyncIOMotorDatabase = Depends(get_database),
     catequista: CatequistaOut = Depends(get_current_catequista),
 ):
-    fase_nome = await _fase_nome_ou_erro(db, dados.fase_id)
+    fase = await garantir_acesso_fase(db, dados.fase_id, catequista)
+    fase_nome = fase["nome"]
     sector_nome = await _sector_nome_ou_erro(db, dados.sector_id) if dados.sector_id else None
     if dados.nucleo_id:
         await _sector_nome_ou_erro(db, dados.nucleo_id)
-    await _garantir_nome_unico(db, dados.nome)
     for pessoa_id in (dados.pai_id, dados.mae_id, dados.padrinho_id, dados.madrinha_id):
         if pessoa_id:
             await _pessoa_ou_erro(db, pessoa_id)
+    await _garantir_nome_unico(db, dados.nome)
 
     doc = dados.model_dump()
     doc["nome"] = doc["nome"].strip()
@@ -299,9 +300,7 @@ async def importar_catequisandos(
     db: AsyncIOMotorDatabase = Depends(get_database),
     catequista: CatequistaOut = Depends(get_current_catequista),
 ):
-    fase = await db.fases.find_one({"_id": object_id_or_404(fase_id)})
-    if fase is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A fase indicada não existe")
+    fase = await garantir_acesso_fase(db, fase_id, catequista)
 
     conteudo = await arquivo.read()
     try:
@@ -437,9 +436,17 @@ async def atualizar_catequisando(
     catequisando_id: str,
     dados: CatequisandoUpdate,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    admin: CatequistaOut = Depends(get_current_admin),
+    catequista: CatequistaOut = Depends(get_current_catequista),
 ):
     oid = object_id_or_404(catequisando_id)
+    doc_atual = await db.catequisandos.find_one({"_id": oid})
+    if doc_atual is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catequisando não encontrado")
+
+    # Um catequista comum só edita catequisandos das fases a que está
+    # atribuído; um admin edita qualquer um.
+    await garantir_acesso_fase(db, doc_atual["fase_id"], catequista)
+
     update_doc = dados.model_dump(exclude_unset=True)
 
     if "nome" in update_doc:
@@ -456,7 +463,9 @@ async def atualizar_catequisando(
         if campo_data in update_doc and update_doc[campo_data] is not None:
             update_doc[campo_data] = datetime.combine(update_doc[campo_data], datetime.min.time())
     if "fase_id" in update_doc:
-        await _fase_nome_ou_erro(db, update_doc["fase_id"])
+        # Mudar de fase por este caminho também exige acesso à fase de destino
+        # (a troca "oficial" com histórico próprio continua a ser outro endpoint).
+        await garantir_acesso_fase(db, update_doc["fase_id"], catequista)
     if "sector_id" in update_doc and update_doc["sector_id"]:
         await _sector_nome_ou_erro(db, update_doc["sector_id"])
     if "nucleo_id" in update_doc and update_doc["nucleo_id"]:
@@ -483,7 +492,7 @@ async def atualizar_catequisando(
         sector = await db.sectores.find_one({"_id": object_id_or_404(doc["sector_id"])})
         sector_nome = sector["nome"] if sector else None
 
-    await registar(db, admin, AcaoAuditoria.ATUALIZAR, "Catequisando", catequisando_id, f"Editou catequisando '{doc['nome']}'")
+    await registar(db, catequista, AcaoAuditoria.ATUALIZAR, "Catequisando", catequisando_id, f"Editou catequisando '{doc['nome']}'")
 
     return await _to_out(db, doc, fase["nome"] if fase else "Fase desconhecida", sector_nome)
 

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -80,6 +81,57 @@ class AuthService extends ChangeNotifier {
       return false;
     } catch (e) {
       _lastError = 'Erro de ligação ao servidor: $e';
+      return false;
+    }
+  }
+
+  /// Inicia sessão com o Google — abre o popup de conta Google do browser,
+  /// obtém o token de identidade, e troca-o por um token da nossa app
+  /// (o backend valida o token do Google, nunca confiamos nisso só porque
+  /// o browser diz que correu bem). Se for a primeira vez desta conta,
+  /// o backend cria automaticamente o catequista.
+  Future<bool> loginComGoogle() async {
+    _lastError = null;
+    try {
+      const clientId = String.fromEnvironment('GOOGLE_CLIENT_ID');
+      final googleSignIn = GoogleSignIn(
+        clientId: clientId.isNotEmpty ? clientId : null,
+        scopes: ['email'],
+      );
+
+      final conta = await googleSignIn.signIn();
+      if (conta == null) {
+        // Utilizador fechou o popup sem escolher conta — não é um erro.
+        return false;
+      }
+
+      final autenticacao = await conta.authentication;
+      final idToken = autenticacao.idToken;
+      if (idToken == null) {
+        _lastError = 'Não foi possível obter a autenticação do Google';
+        return false;
+      }
+
+      final uri = Uri.parse('${ApiConfig.baseUrl}/auth/google');
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'id_token': idToken}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        _token = data['access_token'] as String;
+        _catequista = Catequista.fromJson(data['catequista'] as Map<String, dynamic>);
+        await _storage.write(key: _tokenKey, value: _token);
+        notifyListeners();
+        return true;
+      }
+
+      _lastError = _extractError(response.body) ?? 'Não foi possível iniciar sessão com Google';
+      return false;
+    } catch (e) {
+      _lastError = 'Erro ao iniciar sessão com Google: $e';
       return false;
     }
   }

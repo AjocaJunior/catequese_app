@@ -10,15 +10,19 @@ from app.models.caixa import CATEGORIAS_MATRICULA
 from app.models.catequista import CatequistaOut
 from app.models.pauta import Situacao
 from app.models.relatorio import (
+    GrupoFaseObservacoes,
+    LinhaObservacao,
     LinhaRelatorioAssiduidade,
     LinhaRelatorioFaseGenero,
     LinhaRelatorioSituacaoFinal,
     RelatorioAssiduidade,
     RelatorioCatequisandosPorFaseGenero,
+    RelatorioObservacoes,
     RelatorioSituacaoFinal,
 )
 from app.services.pdf_relatorio_assiduidade import gerar_pdf_relatorio_assiduidade
 from app.services.pdf_relatorio_estatistico import gerar_pdf_relatorio_fase_genero
+from app.services.pdf_relatorio_observacoes import gerar_pdf_relatorio_observacoes
 from app.services.pdf_relatorio_situacao_final import gerar_pdf_relatorio_situacao_final
 
 router = APIRouter(prefix="/relatorios", tags=["relatórios"])
@@ -207,4 +211,58 @@ async def relatorio_assiduidade_pdf(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="relatorio_assiduidade_{ano}.pdf"'},
+    )
+
+
+async def _montar_relatorio_observacoes(db: AsyncIOMotorDatabase) -> RelatorioObservacoes:
+    """Lista todos os catequisandos com o campo 'observações' preenchido,
+    agrupados por fase — não depende do ano letivo, é sempre o estado atual
+    (a observação é uma nota viva, não um registo histórico por ano)."""
+    fases = [doc async for doc in db.fases.find().sort("ordem", 1)]
+
+    grupos: list[GrupoFaseObservacoes] = []
+    total = 0
+    for fase in fases:
+        fase_id = str(fase["_id"])
+        cursor = db.catequisandos.find({
+            "fase_id": fase_id,
+            "observacoes": {"$nin": [None, ""]},
+        }).sort("nome", 1)
+
+        linhas: list[LinhaObservacao] = []
+        numero = 1
+        async for doc in cursor:
+            linhas.append(LinhaObservacao(
+                numero=numero, catequisando_id=str(doc["_id"]), nome=doc["nome"], observacoes=doc["observacoes"],
+            ))
+            numero += 1
+
+        if linhas:
+            grupos.append(GrupoFaseObservacoes(
+                fase_id=fase_id, fase_nome=fase["nome"], ordem=fase["ordem"], linhas=linhas,
+            ))
+            total += len(linhas)
+
+    return RelatorioObservacoes(grupos=grupos, total=total)
+
+
+@router.get("/observacoes", response_model=RelatorioObservacoes)
+async def relatorio_observacoes(
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    _: CatequistaOut = Depends(get_current_admin),
+):
+    return await _montar_relatorio_observacoes(db)
+
+
+@router.get("/observacoes/pdf")
+async def relatorio_observacoes_pdf(
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    _: CatequistaOut = Depends(get_current_admin),
+):
+    relatorio = await _montar_relatorio_observacoes(db)
+    pdf_bytes = gerar_pdf_relatorio_observacoes(relatorio)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="relatorio_observacoes.pdf"'},
     )

@@ -49,6 +49,10 @@ class EsqueciSenhaRequest(BaseModel):
     email: EmailStr
 
 
+class LoginGoogleRequest(BaseModel):
+    id_token: str
+
+
 class RedefinirSenhaRequest(BaseModel):
     email: EmailStr
     codigo: str = Field(..., min_length=6, max_length=6)

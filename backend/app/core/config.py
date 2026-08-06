@@ -20,14 +20,19 @@ class Settings(BaseSettings):
     MONGODB_URI: str
     DB_NAME: str = "catequese"
 
-    # Autenticação (usado a partir do Módulo 2)
-    JWT_SECRET: str = "change-me-in-production"
+    # Autenticação
+    # SEM valor por omissão de propósito, tal como o MONGODB_URI acima —
+    # um segredo previsível ("change-me-in-production") permitiria a
+    # qualquer pessoa forjar tokens válidos (incluindo de administrador)
+    # se a variável de ambiente não fosse definida em produção por engano.
+    JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60 * 12  # 12 horas
 
     # CORS - lista de origens permitidas, separadas por vírgula
-    # Ex: "https://catequese-app.onrender.com,http://localhost:5000"
-    CORS_ORIGINS: str = "*"
+    # Ex: "https://catequese-app-sa.web.app,http://localhost:5000"
+    # SEM "*" por omissão — define sempre as origens exatas em produção.
+    CORS_ORIGINS: str = "https://catequese-app-sa.web.app"
 
     # Email (recuperação de palavra-passe). Vazio = funcionalidade desativada
     # de forma controlada (dá erro claro em vez de tentar ligar a lado nenhum).
@@ -35,6 +40,12 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
+
+    # Iniciar sessão com Google (Web). Vazio = funcionalidade desativada de
+    # forma controlada. É o "Client ID" do OAuth 2.0 Client (tipo "Web
+    # application") criado no Google Cloud Console — não é segredo, é
+    # normal aparecer também no frontend.
+    GOOGLE_CLIENT_ID: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

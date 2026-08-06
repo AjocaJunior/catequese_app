@@ -165,3 +165,52 @@ class RelatorioAssiduidade {
         taxaGeral: (json['taxa_geral'] as num).toDouble(),
       );
 }
+
+class LinhaObservacao {
+  final int numero;
+  final String catequisandoId;
+  final String nome;
+  final String observacoes;
+
+  LinhaObservacao({
+    required this.numero,
+    required this.catequisandoId,
+    required this.nome,
+    required this.observacoes,
+  });
+
+  factory LinhaObservacao.fromJson(Map<String, dynamic> json) => LinhaObservacao(
+        numero: json['numero'] as int,
+        catequisandoId: json['catequisando_id'] as String,
+        nome: json['nome'] as String,
+        observacoes: json['observacoes'] as String,
+      );
+}
+
+class GrupoFaseObservacoes {
+  final String faseId;
+  final String faseNome;
+  final int ordem;
+  final List<LinhaObservacao> linhas;
+
+  GrupoFaseObservacoes({required this.faseId, required this.faseNome, required this.ordem, required this.linhas});
+
+  factory GrupoFaseObservacoes.fromJson(Map<String, dynamic> json) => GrupoFaseObservacoes(
+        faseId: json['fase_id'] as String,
+        faseNome: json['fase_nome'] as String,
+        ordem: json['ordem'] as int,
+        linhas: (json['linhas'] as List).map((e) => LinhaObservacao.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+}
+
+class RelatorioObservacoes {
+  final List<GrupoFaseObservacoes> grupos;
+  final int total;
+
+  RelatorioObservacoes({required this.grupos, required this.total});
+
+  factory RelatorioObservacoes.fromJson(Map<String, dynamic> json) => RelatorioObservacoes(
+        grupos: (json['grupos'] as List).map((e) => GrupoFaseObservacoes.fromJson(e as Map<String, dynamic>)).toList(),
+        total: json['total'] as int,
+      );
+}

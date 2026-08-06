@@ -7,7 +7,7 @@ import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/relatorio_service.dart';
 
-enum _TipoRelatorio { faseGenero, situacaoFinal, assiduidade }
+enum _TipoRelatorio { faseGenero, situacaoFinal, assiduidade, observacoes }
 
 class RelatoriosScreen extends StatefulWidget {
   const RelatoriosScreen({super.key});
@@ -25,6 +25,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
   RelatorioCatequisandosPorFaseGenero? _relFaseGenero;
   RelatorioSituacaoFinal? _relSituacaoFinal;
   RelatorioAssiduidade? _relAssiduidade;
+  RelatorioObservacoes? _relObservacoes;
 
   bool _loading = true;
   bool _imprimindo = false;
@@ -72,6 +73,9 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
         case _TipoRelatorio.assiduidade:
           _relAssiduidade = await _service.assiduidade(anoLetivo: _anoSelecionado);
           break;
+        case _TipoRelatorio.observacoes:
+          _relObservacoes = await _service.observacoes();
+          break;
       }
       if (!mounted) return;
       setState(() {});
@@ -90,6 +94,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
         _TipoRelatorio.faseGenero => await _service.catequisandosPorFaseGeneroPdf(anoLetivo: _anoSelecionado),
         _TipoRelatorio.situacaoFinal => await _service.situacaoFinalPdf(anoLetivo: _anoSelecionado),
         _TipoRelatorio.assiduidade => await _service.assiduidadePdf(anoLetivo: _anoSelecionado),
+        _TipoRelatorio.observacoes => await _service.observacoesPdf(),
       };
       await Printing.layoutPdf(onLayout: (_) async => bytes);
     } catch (e) {
@@ -240,6 +245,40 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             const SizedBox(height: 24),
           ],
         );
+      case _TipoRelatorio.observacoes:
+        final r = _relObservacoes;
+        if (r == null || r.grupos.isEmpty) {
+          return const Center(child: Text('Nenhum catequisando tem observações preenchidas de momento.'));
+        }
+        return ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          children: [
+            Row(children: [_chipTotal('Com observação', '${r.total}', Colors.deepOrange)]),
+            const SizedBox(height: 16),
+            for (final grupo in r.grupos) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Text(
+                  grupo.faseNome,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ),
+              Card(
+                child: Column(
+                  children: [
+                    for (final linha in grupo.linhas)
+                      ListTile(
+                        leading: CircleAvatar(radius: 14, child: Text('${linha.numero}', style: const TextStyle(fontSize: 12))),
+                        title: Text(linha.nome, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Text(linha.observacoes),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ],
+        );
     }
   }
 
@@ -282,6 +321,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                     DropdownMenuItem(value: _TipoRelatorio.faseGenero, child: Text('Catequisandos por Fase e Género')),
                     DropdownMenuItem(value: _TipoRelatorio.situacaoFinal, child: Text('Situação Final por Fase')),
                     DropdownMenuItem(value: _TipoRelatorio.assiduidade, child: Text('Assiduidade Geral')),
+                    DropdownMenuItem(value: _TipoRelatorio.observacoes, child: Text('Observações Pendentes')),
                   ],
                   onChanged: (v) {
                     if (v == null) return;
@@ -290,23 +330,24 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                   },
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: DropdownButtonFormField<int>(
-                  value: _anoSelecionado,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Ano letivo',
-                    border: OutlineInputBorder(),
-                    isDense: true,
+              if (_tipo != _TipoRelatorio.observacoes)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: DropdownButtonFormField<int>(
+                    value: _anoSelecionado,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Ano letivo',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: _anos.map((a) => DropdownMenuItem(value: a, child: Text('$a'))).toList(),
+                    onChanged: (v) {
+                      setState(() => _anoSelecionado = v);
+                      _carregarRelatorio();
+                    },
                   ),
-                  items: _anos.map((a) => DropdownMenuItem(value: a, child: Text('$a'))).toList(),
-                  onChanged: (v) {
-                    setState(() => _anoSelecionado = v);
-                    _carregarRelatorio();
-                  },
                 ),
-              ),
               if (_loading)
                 const Expanded(child: Center(child: CircularProgressIndicator()))
               else if (_erro != null)

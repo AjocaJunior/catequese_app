@@ -2,16 +2,20 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo.errors import DuplicateKeyError
 from starlette.concurrency import run_in_threadpool
 
 from app.core.auditoria import registar as registar_auditoria
 from app.core.catequista_helpers import construir_catequista_completo
+from app.core.config import get_settings
 from app.core.database import get_database
 from app.core.deps import get_current_catequista
+from app.core.rate_limit import limiter
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.auditoria import AcaoAuditoria
 from app.models.catequista import (
@@ -20,6 +24,7 @@ from app.models.catequista import (
     CatequistaCreate,
     CatequistaOut,
     EsqueciSenhaRequest,
+    LoginGoogleRequest,
     RedefinirSenhaRequest,
     Token,
 )
@@ -33,7 +38,8 @@ def _normalizar_nome(nome: str) -> str:
 
 
 @router.post("/registar", response_model=CatequistaOut, status_code=status.HTTP_201_CREATED)
-async def registar(dados: CatequistaCreate, db: AsyncIOMotorDatabase = Depends(get_database)):
+@limiter.limit("5/minute")
+async def registar(request: Request, dados: CatequistaCreate, db: AsyncIOMotorDatabase = Depends(get_database)):
     # O primeiro catequista a registar-se numa base de dados nova torna-se
     # administrador automaticamente (bootstrap). Os seguintes ficam sem
     # permissões de admin até serem promovidos por um administrador existente.
@@ -73,12 +79,14 @@ async def registar(dados: CatequistaCreate, db: AsyncIOMotorDatabase = Depends(g
 
 
 @router.post("/login", response_model=Token)
+@limiter.limit("8/minute")
 async def login(
+    request: Request,
     form: OAuth2PasswordRequestForm = Depends(),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
     doc = await db.catequistas.find_one({"email": form.username.lower().strip()})
-    if not doc or not verify_password(form.password, doc["hashed_password"]):
+    if not doc or not doc.get("hashed_password") or not verify_password(form.password, doc["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou palavra-passe incorretos",
@@ -86,6 +94,75 @@ async def login(
         )
 
     catequista_out = await construir_catequista_completo(db, doc)
+    token = create_access_token(subject=str(doc["_id"]))
+    return Token(access_token=token, catequista=catequista_out)
+
+
+@router.post("/google", response_model=Token)
+@limiter.limit("10/minute")
+async def login_google(
+    request: Request,
+    dados: LoginGoogleRequest,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """Inicia sessão (ou regista automaticamente, se for a primeira vez)
+    usando um token de identidade do Google — validado pelo backend, nunca
+    confiado apenas porque o frontend diz que é válido."""
+    settings = get_settings()
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Iniciar sessão com Google ainda não está configurado nesta instalação",
+        )
+
+    try:
+        payload = google_id_token.verify_oauth2_token(
+            dados.id_token, google_requests.Request(), settings.GOOGLE_CLIENT_ID,
+        )
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token do Google inválido ou expirado")
+
+    email = payload.get("email")
+    if not email or not payload.get("email_verified", False):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="O email da conta Google não está verificado")
+    email = email.lower().strip()
+    nome_google = (payload.get("name") or email).strip()
+
+    doc = await db.catequistas.find_one({"email": email})
+
+    if doc is None:
+        # Primeira vez com esta conta Google — regista automaticamente.
+        # O primeiro catequista de sempre continua a tornar-se admin,
+        # independentemente de se registar por password ou por Google.
+        ja_existem = await db.catequistas.count_documents({})
+        is_admin = ja_existem == 0
+        novo_doc = {
+            "nome": nome_google,
+            "nome_normalizado": _normalizar_nome(nome_google),
+            "email": email,
+            "hashed_password": None,
+            "is_admin": is_admin,
+            "criado_em": datetime.now(timezone.utc),
+        }
+        try:
+            result = await db.catequistas.insert_one(novo_doc)
+        except DuplicateKeyError:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Já existe um catequista registado com o nome '{nome_google}' — contacta um administrador.",
+            )
+        novo_doc["_id"] = result.inserted_id
+        doc = novo_doc
+        catequista_out = await construir_catequista_completo(db, doc)
+        await registar_auditoria(
+            db, catequista_out, AcaoAuditoria.CRIAR, "Catequista", str(result.inserted_id),
+            "Registou-se com Google" + (" (administrador inicial)" if is_admin else ""),
+        )
+    else:
+        # Conta já existente (criada por password ou por Google antes) —
+        # inicia sessão nela, ligando pelo email verificado.
+        catequista_out = await construir_catequista_completo(db, doc)
+
     token = create_access_token(subject=str(doc["_id"]))
     return Token(access_token=token, catequista=catequista_out)
 
@@ -135,7 +212,9 @@ async def alterar_senha(
 
 
 @router.post("/esqueci-senha")
+@limiter.limit("3/minute")
 async def esqueci_senha(
+    request: Request,
     dados: EsqueciSenhaRequest,
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
@@ -166,7 +245,9 @@ async def esqueci_senha(
 
 
 @router.post("/redefinir-senha", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("6/minute")
 async def redefinir_senha(
+    request: Request,
     dados: RedefinirSenhaRequest,
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):

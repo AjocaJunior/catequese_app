@@ -44,4 +44,12 @@ class RelatorioService {
     final query = anoLetivo != null ? '?ano_letivo=$anoLetivo' : '';
     return _client.getBytes('/relatorios/assiduidade/pdf$query');
   }
+
+  /// Não depende do ano letivo — é sempre o estado atual das observações.
+  Future<RelatorioObservacoes> observacoes() async {
+    final data = await _client.get('/relatorios/observacoes') as Map<String, dynamic>;
+    return RelatorioObservacoes.fromJson(data);
+  }
+
+  Future<Uint8List> observacoesPdf() => _client.getBytes('/relatorios/observacoes/pdf');
 }

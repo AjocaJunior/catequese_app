@@ -54,3 +54,22 @@ class RelatorioAssiduidade(BaseModel):
     ano_letivo: int
     linhas: list[LinhaRelatorioAssiduidade]
     taxa_geral: float
+
+
+class LinhaObservacao(BaseModel):
+    numero: int
+    catequisando_id: str
+    nome: str
+    observacoes: str
+
+
+class GrupoFaseObservacoes(BaseModel):
+    fase_id: str
+    fase_nome: str
+    ordem: int
+    linhas: list[LinhaObservacao]
+
+
+class RelatorioObservacoes(BaseModel):
+    grupos: list[GrupoFaseObservacoes]
+    total: int

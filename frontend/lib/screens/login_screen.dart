@@ -47,6 +47,26 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _submitGoogle() async {
+    setState(() => _submitting = true);
+
+    final auth = context.read<AuthService>();
+    final ok = await auth.loginComGoogle();
+
+    if (!mounted) return;
+    setState(() => _submitting = false);
+
+    if (ok) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } else if (auth.lastError != null) {
+      // Se lastError for null, o utilizador só fechou o popup do Google —
+      // não mostra nada, não foi um erro real.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(auth.lastError!)),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
@@ -140,6 +160,27 @@ class _LoginScreenState extends State<LoginScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
                           : const Text('Entrar'),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text('ou', style: TextStyle(color: Colors.grey.shade600)),
+                      ),
+                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      onPressed: _submitting ? null : _submitGoogle,
+                      icon: const Icon(Icons.g_mobiledata, size: 28),
+                      label: const Text('Continuar com Google'),
                     ),
                   ),
                   const SizedBox(height: 12),
