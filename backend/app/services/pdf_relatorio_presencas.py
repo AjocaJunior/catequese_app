@@ -102,7 +102,7 @@ def gerar_pdf_relatorio_presencas(
 
     largura_util = doc.width
     col_num = 0.9 * cm
-    col_nome = (largura_util - col_num) * 0.36
+    col_nome = (largura_util - col_num) * 0.30
     col_resto = (largura_util - col_num - col_nome) / 4
 
     tabela = Table(
