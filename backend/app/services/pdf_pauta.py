@@ -56,6 +56,7 @@ def gerar_pdf_pauta(pauta: PautaOut) -> bytes:
         return Paragraph(texto, estilo)
 
     dados_tabela = [[
+        _c("Nº", estilo_cabecalho),
         _c("NOME", estilo_cabecalho_esq),
         _c("PRESENÇAS", estilo_cabecalho),
         _c("FALTAS", estilo_cabecalho),
@@ -63,12 +64,13 @@ def gerar_pdf_pauta(pauta: PautaOut) -> bytes:
         _c("SITUAÇÃO", estilo_cabecalho),
     ]]
 
-    for item in pauta.itens:
+    for i, item in enumerate(pauta.itens, start=1):
         situacao_texto = _ROTULO_SITUACAO.get(
             item.situacao.value if item.situacao else None, "Por definir"
         )
         estilo_situacao = estilo_celula_negrito if item.situacao else estilo_celula
         dados_tabela.append([
+            _c(str(i)),
             _c(item.catequisando_nome, estilo_celula_esq),
             _c(str(item.total_presencas)),
             _c(str(item.total_faltas)),
@@ -77,15 +79,18 @@ def gerar_pdf_pauta(pauta: PautaOut) -> bytes:
         ])
 
     if len(dados_tabela) == 1:
-        dados_tabela.append([_c("Sem catequisandos nesta fase", estilo_celula_esq), _c("—"), _c("—"), _c("—"), _c("—")])
+        dados_tabela.append([
+            _c("—"), _c("Sem catequisandos nesta fase", estilo_celula_esq), _c("—"), _c("—"), _c("—"), _c("—"),
+        ])
 
     largura_util = doc.width
-    col_nome = largura_util * 0.36
-    col_resto = (largura_util - col_nome) / 4
+    col_num = 0.9 * cm
+    col_nome = (largura_util - col_num) * 0.36
+    col_resto = (largura_util - col_num - col_nome) / 4
 
     tabela = Table(
         dados_tabela,
-        colWidths=[col_nome, col_resto, col_resto, col_resto, col_resto],
+        colWidths=[col_num, col_nome, col_resto, col_resto, col_resto, col_resto],
         repeatRows=1,
     )
     estilo_tabela = [

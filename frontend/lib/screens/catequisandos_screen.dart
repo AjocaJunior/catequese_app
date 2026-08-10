@@ -559,76 +559,76 @@ class _CatequisandosScreenState extends State<CatequisandosScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      trailing: isAdmin
-                          ? PopupMenuButton<String>(
-                              icon: const Icon(Icons.more_vert),
-                              onSelected: (valor) {
-                                switch (valor) {
-                                  case 'crismar':
-                                  case 'reativar':
-                                    _alternarCrismado(c);
-                                    break;
-                                  case 'transferir':
-                                    _mostrarFormularioTransferencia(c);
-                                    break;
-                                  case 'guia':
-                                    _imprimirGuiaTransferencia(c);
-                                    break;
-                                  case 'fase':
-                                    _mudarFase(c);
-                                    break;
-                                  case 'editar':
-                                    _abrirFormulario(catequisando: c);
-                                    break;
-                                  case 'apagar':
-                                    _apagar(c);
-                                    break;
-                                }
-                              },
-                              itemBuilder: (context) => [
-                                PopupMenuItem(
-                                  value: eCrismado ? 'reativar' : 'crismar',
-                                  child: ListTile(
-                                    leading: Icon(eCrismado ? Icons.undo : Icons.workspace_premium_outlined),
-                                    title: Text(eCrismado ? 'Reativar' : 'Marcar como Crismado'),
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: eTransferido ? 'guia' : 'transferir',
-                                  child: ListTile(
-                                    leading: Icon(eTransferido ? Icons.print_outlined : Icons.moving_outlined),
-                                    title: Text(eTransferido ? 'Imprimir Guia de Transferência' : 'Transferir'),
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                ),
-                                const PopupMenuItem(
-                                  value: 'fase',
-                                  child: ListTile(
-                                    leading: Icon(Icons.swap_horiz),
-                                    title: Text('Mudar de fase'),
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                ),
-                                const PopupMenuItem(
-                                  value: 'editar',
-                                  child: ListTile(
-                                    leading: Icon(Icons.edit_outlined),
-                                    title: Text('Editar'),
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                ),
-                                const PopupMenuItem(
-                                  value: 'apagar',
-                                  child: ListTile(
-                                    leading: Icon(Icons.delete_outline),
-                                    title: Text('Apagar'),
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                ),
-                              ],
-                            )
-                          : null,
+                      trailing: PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert),
+                        onSelected: (valor) {
+                          switch (valor) {
+                            case 'crismar':
+                            case 'reativar':
+                              _alternarCrismado(c);
+                              break;
+                            case 'transferir':
+                              _mostrarFormularioTransferencia(c);
+                              break;
+                            case 'guia':
+                              _imprimirGuiaTransferencia(c);
+                              break;
+                            case 'fase':
+                              _mudarFase(c);
+                              break;
+                            case 'editar':
+                              _abrirFormulario(catequisando: c);
+                              break;
+                            case 'apagar':
+                              _apagar(c);
+                              break;
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'editar',
+                            child: ListTile(
+                              leading: Icon(Icons.edit_outlined),
+                              title: Text('Editar'),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'fase',
+                            child: ListTile(
+                              leading: Icon(Icons.swap_horiz),
+                              title: Text('Mudar de fase'),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                          if (isAdmin) ...[
+                            PopupMenuItem(
+                              value: eCrismado ? 'reativar' : 'crismar',
+                              child: ListTile(
+                                leading: Icon(eCrismado ? Icons.undo : Icons.workspace_premium_outlined),
+                                title: Text(eCrismado ? 'Reativar' : 'Marcar como Crismado'),
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: eTransferido ? 'guia' : 'transferir',
+                              child: ListTile(
+                                leading: Icon(eTransferido ? Icons.print_outlined : Icons.moving_outlined),
+                                title: Text(eTransferido ? 'Imprimir Guia de Transferência' : 'Transferir'),
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'apagar',
+                              child: ListTile(
+                                leading: Icon(Icons.delete_outline),
+                                title: Text('Apagar'),
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                       onTap: () => _abrirDetalhe(c),
                     );
                   },

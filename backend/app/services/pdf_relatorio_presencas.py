@@ -60,6 +60,7 @@ def gerar_pdf_relatorio_presencas(
         return Paragraph(texto, estilo)
 
     dados_tabela = [[
+        _c("Nº", estilo_cabecalho),
         _c("NOME", estilo_cabecalho_esq),
         _c("PRESENÇAS", estilo_cabecalho),
         _c("FALTAS", estilo_cabecalho),
@@ -69,9 +70,10 @@ def gerar_pdf_relatorio_presencas(
 
     total_presencas = total_faltas = total_faltas_just = total_geral = 0
 
-    for linha in linhas:
+    for i, linha in enumerate(linhas, start=1):
         percentagem = f"{(linha.presencas / linha.total * 100):.0f}%" if linha.total else "—"
         dados_tabela.append([
+            _c(str(i)),
             _c(linha.nome, estilo_celula_esq),
             _c(str(linha.presencas)),
             _c(str(linha.faltas)),
@@ -84,10 +86,13 @@ def gerar_pdf_relatorio_presencas(
         total_geral += linha.total
 
     if not linhas:
-        dados_tabela.append([_c("Sem catequisandos nesta fase", estilo_celula_esq), _c("—"), _c("—"), _c("—"), _c("—")])
+        dados_tabela.append([
+            _c("—"), _c("Sem catequisandos nesta fase", estilo_celula_esq), _c("—"), _c("—"), _c("—"), _c("—"),
+        ])
     else:
         percentagem_geral = f"{(total_presencas / total_geral * 100):.0f}%" if total_geral else "—"
         dados_tabela.append([
+            _c(""),
             _c("TOTAL", estilo_celula_negrito),
             _c(str(total_presencas), estilo_celula_negrito),
             _c(str(total_faltas), estilo_celula_negrito),
@@ -96,12 +101,13 @@ def gerar_pdf_relatorio_presencas(
         ])
 
     largura_util = doc.width
-    col_nome = largura_util * 0.36
-    col_resto = (largura_util - col_nome) / 4
+    col_num = 0.9 * cm
+    col_nome = (largura_util - col_num) * 0.36
+    col_resto = (largura_util - col_num - col_nome) / 4
 
     tabela = Table(
         dados_tabela,
-        colWidths=[col_nome, col_resto, col_resto, col_resto, col_resto],
+        colWidths=[col_num, col_nome, col_resto, col_resto, col_resto, col_resto],
         repeatRows=1,
     )
     estilo_tabela = [
