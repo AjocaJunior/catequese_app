@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -235,6 +236,7 @@ async def esqueci_senha(
         try:
             await run_in_threadpool(enviar_email, doc["email"], "Redefinir palavra-passe", corpo)
         except Exception:
+            logging.exception("Falha ao enviar email de recuperação de senha")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Não foi possível enviar o email. Contacta o administrador.",
