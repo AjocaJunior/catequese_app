@@ -443,10 +443,6 @@ async def atualizar_catequisando(
     if doc_atual is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catequisando não encontrado")
 
-    # Um catequista comum só edita catequisandos das fases a que está
-    # atribuído; um admin edita qualquer um.
-    await garantir_acesso_fase(db, doc_atual["fase_id"], catequista)
-
     update_doc = dados.model_dump(exclude_unset=True)
 
     if "nome" in update_doc:
@@ -463,9 +459,9 @@ async def atualizar_catequisando(
         if campo_data in update_doc and update_doc[campo_data] is not None:
             update_doc[campo_data] = datetime.combine(update_doc[campo_data], datetime.min.time())
     if "fase_id" in update_doc:
-        # Mudar de fase por este caminho também exige acesso à fase de destino
-        # (a troca "oficial" com histórico próprio continua a ser outro endpoint).
-        await garantir_acesso_fase(db, update_doc["fase_id"], catequista)
+        # Qualquer catequista pode editar (e mudar de fase) qualquer
+        # catequisando — só confirma que a fase de destino existe.
+        await _fase_nome_ou_erro(db, update_doc["fase_id"])
     if "sector_id" in update_doc and update_doc["sector_id"]:
         await _sector_nome_ou_erro(db, update_doc["sector_id"])
     if "nucleo_id" in update_doc and update_doc["nucleo_id"]:

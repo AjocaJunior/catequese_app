@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../services/auth_service.dart';
@@ -37,6 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _submitting = false);
 
     if (ok) {
+      TextInput.finishAutofillContext();
       // O AuthGate já trocou para o HomeScreen por baixo (está a "escutar"
       // o AuthService) — só falta fechar este ecrã de login para o revelar.
       Navigator.of(context).popUntil((route) => route.isFirst);
@@ -57,6 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _submitting = false);
 
     if (ok) {
+      TextInput.finishAutofillContext();
       Navigator.of(context).popUntil((route) => route.isFirst);
     } else if (auth.lastError != null) {
       // Se lastError for null, o utilizador só fechou o popup do Google —
@@ -77,11 +80,12 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: isWide ? 420 : double.infinity),
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
             child: Form(
               key: _formKey,
-              child: Column(
+              child: AutofillGroup(
+                child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   ClipRRect(
@@ -195,6 +199,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: const Text('Ainda não tenho conta — registar'),
                   ),
                 ],
+                ),
               ),
             ),
           ),
