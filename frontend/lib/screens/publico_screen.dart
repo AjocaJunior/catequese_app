@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/aniversariante.dart';
 import '../models/foto.dart';
 import '../services/auth_service.dart';
 import '../services/publico_service.dart';
@@ -26,6 +27,7 @@ class _PublicoScreenState extends State<PublicoScreen> {
   final _service = PublicoService();
 
   List<Foto> _fotos = [];
+  List<Aniversariante> _aniversariantes = [];
   bool _loading = true;
   String? _erro;
 
@@ -49,6 +51,14 @@ class _PublicoScreenState extends State<PublicoScreen> {
       setState(() => _erro = 'Não foi possível carregar a informação. Verifica a tua ligação à internet.');
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+
+    try {
+      final aniversariantes = await _service.aniversariosDeHoje();
+      if (!mounted) return;
+      setState(() => _aniversariantes = aniversariantes);
+    } catch (_) {
+      // Não é crítico — se falhar, a página continua a funcionar sem o cartão.
     }
   }
 
@@ -111,6 +121,10 @@ class _PublicoScreenState extends State<PublicoScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
+                if (_aniversariantes.isNotEmpty) ...[
+                  _CartaoAniversarios(aniversariantes: _aniversariantes),
+                  const SizedBox(height: 20),
+                ],
                 if (_loading)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 32),
@@ -186,6 +200,50 @@ class _PublicoScreenState extends State<PublicoScreen> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Cartão festivo com quem faz anos hoje — só aparece quando há alguém.
+class _CartaoAniversarios extends StatelessWidget {
+  final List<Aniversariante> aniversariantes;
+
+  const _CartaoAniversarios({required this.aniversariantes});
+
+  @override
+  Widget build(BuildContext context) {
+    final cor = Theme.of(context).colorScheme.primary;
+    return Card(
+      elevation: 0,
+      color: Colors.amber.withValues(alpha: 0.12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: Colors.amber.shade300),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('🎂', style: TextStyle(fontSize: 22)),
+                const SizedBox(width: 8),
+                Text(
+                  aniversariantes.length == 1 ? 'Aniversário de Hoje' : 'Aniversários de Hoje',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: cor),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            for (final pessoa in aniversariantes)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text('${pessoa.nome} — ${pessoa.idade} anos'),
+              ),
+          ],
         ),
       ),
     );

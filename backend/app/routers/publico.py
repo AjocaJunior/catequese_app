@@ -51,6 +51,11 @@ class OrganogramaOut(BaseModel):
     sectores_sem_ministerio: list[SectorOrganogramaOut]
 
 
+class AniversarianteOut(BaseModel):
+    nome: str
+    idade: int
+
+
 @router.get("/retiros", response_model=list[RetiroPublicoOut])
 async def listar_retiros_publico(db: AsyncIOMotorDatabase = Depends(get_database)):
     resultado = []
@@ -204,4 +209,29 @@ async def liturgia_diaria_publico():
 
     _cache_liturgia.clear()  # só guarda o dia corrente, liberta dias antigos
     _cache_liturgia[chave] = resultado
+    return resultado
+
+
+@router.get("/aniversarios", response_model=list[AniversarianteOut])
+async def aniversarios_de_hoje(db: AsyncIOMotorDatabase = Depends(get_database)):
+    """Catequisandos ativos que fazem anos hoje (segundo a data em
+    Moçambique) — para uma lembrança diária na página pública, sem
+    precisar de login. Crismados/transferidos não aparecem aqui."""
+    hoje = datetime.now(_FUSO_MOCAMBIQUE).date()
+
+    resultado: list[AniversarianteOut] = []
+    cursor = db.catequisandos.find({
+        "situacao": "ativo",
+        "data_nascimento": {"$ne": None},
+    })
+    async for doc in cursor:
+        nascimento = doc.get("data_nascimento")
+        if nascimento is None:
+            continue
+        nascimento_data = nascimento.date() if isinstance(nascimento, datetime) else nascimento
+        if nascimento_data.month == hoje.month and nascimento_data.day == hoje.day:
+            idade = hoje.year - nascimento_data.year
+            resultado.append(AniversarianteOut(nome=doc["nome"], idade=idade))
+
+    resultado.sort(key=lambda a: a.nome)
     return resultado

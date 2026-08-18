@@ -1,3 +1,4 @@
+import '../models/aniversariante.dart';
 import '../models/evento.dart';
 import '../models/foto.dart';
 import '../models/liturgia.dart';
@@ -10,6 +11,11 @@ import 'api_client.dart';
 /// /publico/* que não exigem sessão iniciada.
 class PublicoService {
   final ApiClient _client = ApiClient(null);
+
+  Future<List<Aniversariante>> aniversariosDeHoje() async {
+    final data = await _client.get('/publico/aniversarios') as List;
+    return data.map((e) => Aniversariante.fromJson(e as Map<String, dynamic>)).toList();
+  }
 
   Future<List<RetiroPublico>> listarRetiros() async {
     final data = await _client.get('/publico/retiros') as List;
