@@ -21,8 +21,14 @@ class PautaService {
     final query = anoLetivo != null ? '&ano_letivo=$anoLetivo' : '';
     final data = await _client.put('/pautas?fase_id=$faseId$query', {
       'situacoes': itens
-          .where((i) => i.situacao != null)
-          .map((i) => {'catequisando_id': i.catequisandoId, 'situacao': i.situacao!.valor})
+          .where((i) =>
+              i.situacao != null || i.comportamento != null || (i.observacao != null && i.observacao!.trim().isNotEmpty))
+          .map((i) => {
+                'catequisando_id': i.catequisandoId,
+                if (i.situacao != null) 'situacao': i.situacao!.valor,
+                if (i.comportamento != null) 'comportamento': i.comportamento!.valor,
+                if (i.observacao != null && i.observacao!.trim().isNotEmpty) 'observacao': i.observacao!.trim(),
+              })
           .toList(),
     });
     return Pauta.fromJson(data as Map<String, dynamic>);

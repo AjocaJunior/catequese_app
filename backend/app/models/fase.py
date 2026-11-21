@@ -13,6 +13,13 @@ class FaseCreate(BaseModel):
     hora: Optional[str] = Field(None, max_length=20)
     local: Optional[str] = Field(None, max_length=100)
     programa_pdf_url: Optional[str] = Field(None, max_length=500)
+    fase_seguinte_id: Optional[str] = Field(
+        None, description="Fase para onde vão os catequisandos que progridem. Vazio = última etapa."
+    )
+    transitoria: bool = Field(
+        False,
+        description="Fase de passagem (ex: Sacramento do Baptismo): sai-se dela ao registar a data de baptismo.",
+    )
 
 
 class FaseUpdate(BaseModel):
@@ -23,6 +30,8 @@ class FaseUpdate(BaseModel):
     hora: Optional[str] = Field(None, max_length=20)
     local: Optional[str] = Field(None, max_length=100)
     programa_pdf_url: Optional[str] = Field(None, max_length=500)
+    fase_seguinte_id: Optional[str] = None
+    transitoria: Optional[bool] = None
 
 
 class CatequistaResumo(BaseModel):
@@ -40,6 +49,9 @@ class FaseOut(BaseModel):
     hora: Optional[str] = None
     local: Optional[str] = None
     programa_pdf_url: Optional[str] = None
+    fase_seguinte_id: Optional[str] = None
+    fase_seguinte_nome: Optional[str] = None
+    transitoria: bool = False
     catequistas: list[CatequistaResumo] = []
 
 

@@ -127,6 +127,17 @@ class PublicoLinksScreen extends StatelessWidget {
                   ),
                 ),
               ),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.groups_outlined),
+                  title: const Text('Directório Pastoral da Catequese'),
+                  trailing: const Icon(Icons.open_in_new, size: 18),
+                  onTap: () => _abrirLink(
+                    context,
+                    'https://drive.google.com/file/d/14HeliLjRhvf1zXSoGUQsjWTswvQ-Z5xD/view?usp=sharing',
+                  ),
+                ),
+              ),
               const SizedBox(height: 24),
             ],
           ),

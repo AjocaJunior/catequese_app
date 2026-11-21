@@ -32,6 +32,14 @@ async def _to_out(db: AsyncIOMotorDatabase, doc: dict) -> FaseOut:
         cursor = db.catequistas.find({"_id": {"$in": oids}}).sort("nome", 1)
         catequistas = [CatequistaResumo(id=str(c["_id"]), nome=c["nome"]) async for c in cursor]
 
+    fase_seguinte_nome = None
+    fase_seguinte_id = doc.get("fase_seguinte_id")
+    if fase_seguinte_id and ObjectId.is_valid(fase_seguinte_id):
+        seguinte = await db.fases.find_one({"_id": ObjectId(fase_seguinte_id)})
+        fase_seguinte_nome = seguinte["nome"] if seguinte else None
+        if seguinte is None:
+            fase_seguinte_id = None  # apontava para uma fase que já não existe
+
     return FaseOut(
         id=str(doc["_id"]),
         nome=doc["nome"],
@@ -41,8 +49,31 @@ async def _to_out(db: AsyncIOMotorDatabase, doc: dict) -> FaseOut:
         hora=doc.get("hora"),
         local=doc.get("local"),
         programa_pdf_url=doc.get("programa_pdf_url"),
+        fase_seguinte_id=fase_seguinte_id,
+        fase_seguinte_nome=fase_seguinte_nome,
+        transitoria=bool(doc.get("transitoria", False)),
         catequistas=catequistas,
     )
+
+
+async def _validar_fase_seguinte(
+    db: AsyncIOMotorDatabase, fase_seguinte_id: str | None, fase_atual_id: str | None
+) -> str | None:
+    """Devolve o id normalizado (None se vazio) ou levanta 400 se a fase
+    indicada não existir ou for a própria fase."""
+    if fase_seguinte_id is None or not fase_seguinte_id.strip():
+        return None
+    fase_seguinte_id = fase_seguinte_id.strip()
+    if fase_atual_id and fase_seguinte_id == fase_atual_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A fase seguinte não pode ser a própria fase",
+        )
+    if await db.fases.find_one({"_id": object_id_or_404(fase_seguinte_id)}) is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="A fase seguinte indicada não existe"
+        )
+    return fase_seguinte_id
 
 
 @router.post("", response_model=FaseOut, status_code=status.HTTP_201_CREATED)
@@ -57,6 +88,8 @@ async def criar_fase(
     else:
         ordem = dados.ordem
 
+    fase_seguinte_id = await _validar_fase_seguinte(db, dados.fase_seguinte_id, None)
+
     doc = {
         "nome": dados.nome.strip(),
         "ordem": ordem,
@@ -65,6 +98,8 @@ async def criar_fase(
         "hora": (dados.hora or "").strip() or None,
         "local": (dados.local or "").strip() or None,
         "programa_pdf_url": (dados.programa_pdf_url or "").strip() or None,
+        "fase_seguinte_id": fase_seguinte_id,
+        "transitoria": dados.transitoria,
         "catequista_ids": [],
         "criado_em": datetime.now(timezone.utc),
     }
@@ -105,6 +140,13 @@ async def atualizar_fase(
             update_doc[campo] = update_doc[campo].strip() or None
     if "dia_semana" in update_doc and update_doc["dia_semana"] is not None:
         update_doc["dia_semana"] = update_doc["dia_semana"].value
+    if "fase_seguinte_id" in update_doc:
+        # Enviar null/"" limpa a fase seguinte (passa a ser última etapa).
+        update_doc["fase_seguinte_id"] = await _validar_fase_seguinte(
+            db, update_doc["fase_seguinte_id"], fase_id
+        )
+    if "transitoria" in update_doc and update_doc["transitoria"] is None:
+        del update_doc["transitoria"]
 
     if not update_doc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nada para atualizar")
@@ -184,5 +226,8 @@ async def apagar_fase(
     result = await db.fases.delete_one({"_id": oid})
     if result.deleted_count == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fase não encontrada")
+
+    # Outras fases que apontavam para esta como "fase seguinte" ficam sem destino.
+    await db.fases.update_many({"fase_seguinte_id": fase_id}, {"$set": {"fase_seguinte_id": None}})
 
     await registar(db, admin, AcaoAuditoria.APAGAR, "Fase", fase_id, f"Apagou a fase '{fase['nome'] if fase else fase_id}'")

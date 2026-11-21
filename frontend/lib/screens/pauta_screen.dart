@@ -34,6 +34,28 @@ class _PautaScreenState extends State<PautaScreen> {
   bool _partilhando = false;
   String? _erro;
 
+  final Map<String, TextEditingController> _observacaoControllers = {};
+
+  TextEditingController _controladorObservacao(ItemPauta item) {
+    return _observacaoControllers.putIfAbsent(
+      item.catequisandoId,
+      () => TextEditingController(text: item.observacao ?? ''),
+    );
+  }
+
+  void _limparControladoresObservacao() {
+    for (final c in _observacaoControllers.values) {
+      c.dispose();
+    }
+    _observacaoControllers.clear();
+  }
+
+  @override
+  void dispose() {
+    _limparControladoresObservacao();
+    super.dispose();
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -75,6 +97,7 @@ class _PautaScreenState extends State<PautaScreen> {
     try {
       final pauta = await _pautaService.obter(faseId: _faseId!);
       if (!mounted) return;
+      _limparControladoresObservacao();
       setState(() => _pauta = pauta);
     } catch (e) {
       if (!mounted) return;
@@ -245,6 +268,9 @@ class _PautaScreenState extends State<PautaScreen> {
                           itemCount: _pauta!.itens.length,
                           itemBuilder: (context, i) {
                             final item = _pauta!.itens[i];
+                            final genero = item.genero == 'masculino'
+                                ? 'M'
+                                : (item.genero == 'feminino' ? 'F' : '—');
                             return Card(
                               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                               child: Padding(
@@ -252,18 +278,49 @@ class _PautaScreenState extends State<PautaScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(item.catequisandoNome, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    const SizedBox(height: 4),
                                     Row(
                                       children: [
-                                        _chip('${item.totalPresencas}', 'presenças', Colors.green),
-                                        const SizedBox(width: 6),
-                                        _chip('${item.totalFaltas}', 'faltas', Colors.red),
-                                        const SizedBox(width: 6),
-                                        _chip('${item.totalFaltasJustificadas}', 'justif.', Colors.orange),
+                                        Expanded(
+                                          child: Text(
+                                            item.catequisandoNome,
+                                            style: const TextStyle(fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                        CircleAvatar(
+                                          radius: 12,
+                                          child: Text(genero, style: const TextStyle(fontSize: 11)),
+                                        ),
                                       ],
                                     ),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: 10),
+                                    const Text('Comportamento', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                                    const SizedBox(height: 4),
+                                    SegmentedButton<Comportamento>(
+                                      segments: const [
+                                        ButtonSegment(value: Comportamento.razoavel, label: Text('Razoável')),
+                                        ButtonSegment(value: Comportamento.bom, label: Text('Bom')),
+                                        ButtonSegment(value: Comportamento.excelente, label: Text('Excelente')),
+                                      ],
+                                      selected: item.comportamento != null ? {item.comportamento!} : {},
+                                      emptySelectionAllowed: true,
+                                      onSelectionChanged: (v) {
+                                        setState(() => item.comportamento = v.isEmpty ? null : v.first);
+                                      },
+                                    ),
+                                    const SizedBox(height: 10),
+                                    TextField(
+                                      controller: _controladorObservacao(item),
+                                      decoration: const InputDecoration(
+                                        labelText: 'Observação',
+                                        border: OutlineInputBorder(),
+                                        isDense: true,
+                                      ),
+                                      maxLines: 2,
+                                      onChanged: (v) => item.observacao = v,
+                                    ),
+                                    const SizedBox(height: 10),
+                                    const Text('Resultado', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                                    const SizedBox(height: 4),
                                     SegmentedButton<Situacao>(
                                       segments: const [
                                         ButtonSegment(value: Situacao.permanece, label: Text('Permanece')),
@@ -305,14 +362,6 @@ class _PautaScreenState extends State<PautaScreen> {
                 ),
               ),
             ),
-    );
-  }
-
-  Widget _chip(String valor, String rotulo, Color cor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: cor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-      child: Text('$valor $rotulo', style: TextStyle(color: cor, fontSize: 12, fontWeight: FontWeight.w600)),
     );
   }
 }

@@ -59,6 +59,12 @@ class _FasesScreenState extends State<FasesScreen> {
     final localController = TextEditingController(text: fase?.local ?? '');
     final programaController = TextEditingController(text: fase?.programaPdfUrl ?? '');
     DiaSemana? diaSemana = fase?.diaSemana;
+    // Só aceita como valor inicial uma fase seguinte que ainda exista na lista
+    // (e que não seja a própria) — o Dropdown rebenta com valores sem item.
+    String? faseSeguinteId = _fases.any((f) => f.id == fase?.faseSeguinteId && f.id != fase?.id)
+        ? fase?.faseSeguinteId
+        : null;
+    bool transitoria = fase?.transitoria ?? false;
     final formKey = GlobalKey<FormState>();
 
     final confirmar = await showDialog<bool>(
@@ -124,6 +130,37 @@ class _FasesScreenState extends State<FasesScreen> {
                       ),
                       keyboardType: TextInputType.url,
                     ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String?>(
+                      value: faseSeguinteId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Fase seguinte (para quem progride)',
+                        helperText: 'Para onde vai quem "Progride" quando o ano letivo avança.',
+                        helperMaxLines: 2,
+                      ),
+                      items: [
+                        const DropdownMenuItem<String?>(value: null, child: Text('Nenhuma (última etapa)')),
+                        ..._fases.where((f) => f.id != fase?.id).map(
+                              (f) => DropdownMenuItem<String?>(
+                                value: f.id,
+                                child: Text(f.nome, overflow: TextOverflow.ellipsis),
+                              ),
+                            ),
+                      ],
+                      onChanged: (v) => setStateDialog(() => faseSeguinteId = v),
+                    ),
+                    const SizedBox(height: 4),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Fase transitória'),
+                      subtitle: const Text(
+                        'Ex: Sacramento do Baptismo. Quem está nela passa para a fase seguinte '
+                        'assim que se regista a sua data de baptismo.',
+                      ),
+                      value: transitoria,
+                      onChanged: (v) => setStateDialog(() => transitoria = v),
+                    ),
                   ],
                 ),
               ),
@@ -153,6 +190,8 @@ class _FasesScreenState extends State<FasesScreen> {
           hora: horaController.text.trim().isEmpty ? null : horaController.text.trim(),
           local: localController.text.trim(),
           programaPdfUrl: programaController.text.trim(),
+          faseSeguinteId: faseSeguinteId,
+          transitoria: transitoria,
         );
       } else {
         await _service.atualizar(
@@ -163,6 +202,9 @@ class _FasesScreenState extends State<FasesScreen> {
           hora: horaController.text.trim().isEmpty ? null : horaController.text.trim(),
           local: localController.text.trim(),
           programaPdfUrl: programaController.text.trim(),
+          faseSeguinteId: faseSeguinteId,
+          definirFaseSeguinte: true,
+          transitoria: transitoria,
         );
       }
       _carregar();
@@ -309,6 +351,8 @@ class _FasesScreenState extends State<FasesScreen> {
                             final fase = _fases[i];
                             final nomesCatequistas = fase.catequistas.map((c) => c.nome).join(', ');
                             final detalhes = [
+                              if (fase.transitoria) 'Transitória',
+                              if (fase.faseSeguinteNome != null) '→ ${fase.faseSeguinteNome}',
                               if (fase.diaSemana != null)
                                 '${fase.diaSemana!.rotulo}${fase.hora != null ? ', ${fase.hora}' : ''}',
                               if (fase.nomeCatecismo != null && fase.nomeCatecismo!.isNotEmpty)

@@ -10,8 +10,19 @@ class ConfiguracaoService {
     return Configuracao.fromJson(data);
   }
 
-  Future<Configuracao> avancarAnoLetivo(int novoAno) async {
-    final data = await _client.put('/configuracao/ano-letivo', {'novo_ano': novoAno});
-    return Configuracao.fromJson(data as Map<String, dynamic>);
+  /// O que aconteceria a cada catequisando se o ano avançasse agora (não
+  /// altera nada).
+  Future<PreviaTransicao> previaTransicao(int novoAno) async {
+    final data = await _client.get('/configuracao/ano-letivo/previa-transicao?novo_ano=$novoAno')
+        as Map<String, dynamic>;
+    return PreviaTransicao.fromJson(data);
+  }
+
+  Future<ResultadoAvancoAno> avancarAnoLetivo(int novoAno, {bool aplicarTransicao = false}) async {
+    final data = await _client.put('/configuracao/ano-letivo', {
+      'novo_ano': novoAno,
+      'aplicar_transicao': aplicarTransicao,
+    });
+    return ResultadoAvancoAno.fromJson(data as Map<String, dynamic>);
   }
 }

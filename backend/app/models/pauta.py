@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Situacao(str, Enum):
@@ -10,22 +10,33 @@ class Situacao(str, Enum):
     PROGRIDE = "progride"
 
 
+class Comportamento(str, Enum):
+    RAZOAVEL = "razoavel"
+    BOM = "bom"
+    EXCELENTE = "excelente"
+
+
 class ItemPautaOut(BaseModel):
     catequisando_id: str
     catequisando_nome: str
+    genero: Optional[str] = None
     total_presencas: int
     total_faltas: int
     total_faltas_justificadas: int
     situacao: Optional[Situacao] = None
+    comportamento: Optional[Comportamento] = None
+    observacao: Optional[str] = None
 
 
-class SituacaoItemBody(BaseModel):
+class ItemPautaBody(BaseModel):
     catequisando_id: str
-    situacao: Situacao
+    situacao: Optional[Situacao] = None
+    comportamento: Optional[Comportamento] = None
+    observacao: Optional[str] = Field(None, max_length=300)
 
 
 class DefinirPautaRequest(BaseModel):
-    situacoes: list[SituacaoItemBody]
+    situacoes: list[ItemPautaBody]
 
 
 class PautaOut(BaseModel):

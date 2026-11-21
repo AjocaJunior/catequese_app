@@ -11,30 +11,80 @@ enum Situacao {
   }
 }
 
+enum Comportamento {
+  razoavel,
+  bom,
+  excelente;
+
+  String get valor {
+    switch (this) {
+      case Comportamento.razoavel:
+        return 'razoavel';
+      case Comportamento.bom:
+        return 'bom';
+      case Comportamento.excelente:
+        return 'excelente';
+    }
+  }
+
+  String get rotulo {
+    switch (this) {
+      case Comportamento.razoavel:
+        return 'Razoável';
+      case Comportamento.bom:
+        return 'Bom';
+      case Comportamento.excelente:
+        return 'Excelente';
+    }
+  }
+
+  static Comportamento? fromValor(String? v) {
+    switch (v) {
+      case 'razoavel':
+        return Comportamento.razoavel;
+      case 'bom':
+        return Comportamento.bom;
+      case 'excelente':
+        return Comportamento.excelente;
+      default:
+        return null;
+    }
+  }
+}
+
 class ItemPauta {
   final String catequisandoId;
   final String catequisandoNome;
+  final String? genero;
   final int totalPresencas;
   final int totalFaltas;
   final int totalFaltasJustificadas;
   Situacao? situacao;
+  Comportamento? comportamento;
+  String? observacao;
 
   ItemPauta({
     required this.catequisandoId,
     required this.catequisandoNome,
+    this.genero,
     required this.totalPresencas,
     required this.totalFaltas,
     required this.totalFaltasJustificadas,
     this.situacao,
+    this.comportamento,
+    this.observacao,
   });
 
   factory ItemPauta.fromJson(Map<String, dynamic> json) => ItemPauta(
         catequisandoId: json['catequisando_id'] as String,
         catequisandoNome: json['catequisando_nome'] as String,
+        genero: json['genero'] as String?,
         totalPresencas: json['total_presencas'] as int,
         totalFaltas: json['total_faltas'] as int,
         totalFaltasJustificadas: json['total_faltas_justificadas'] as int,
         situacao: Situacao.fromValor(json['situacao'] as String?),
+        comportamento: Comportamento.fromValor(json['comportamento'] as String?),
+        observacao: json['observacao'] as String?,
       );
 }
 

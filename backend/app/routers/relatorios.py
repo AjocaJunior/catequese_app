@@ -4,9 +4,9 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.core.ano_letivo import obter_ano_letivo_atual
 from app.core.database import get_database
 from app.core.deps import get_current_admin
-from app.core.mongo_utils import object_id_or_404
-from app.core.pauta_helpers import montar_pauta
-from app.models.caixa import CATEGORIAS_MATRICULA
+from app.core.pauta_helpers import cids_da_fase_no_ano, montar_pauta
+from app.core.transicao import listar_matriculas_pendentes
+from app.models.caixa import CATEGORIA_INSCRICAO, CATEGORIA_RENOVACAO, CATEGORIAS_MATRICULA
 from app.models.catequista import CatequistaOut
 from app.models.pauta import Situacao
 from app.models.relatorio import (
@@ -14,50 +14,49 @@ from app.models.relatorio import (
     LinhaObservacao,
     LinhaRelatorioAssiduidade,
     LinhaRelatorioFaseGenero,
+    LinhaRelatorioInscricoes,
     LinhaRelatorioSituacaoFinal,
     RelatorioAssiduidade,
     RelatorioCatequisandosPorFaseGenero,
+    RelatorioInscricoes,
     RelatorioObservacoes,
     RelatorioSituacaoFinal,
 )
+from app.models.transicao import MatriculaPendente
 from app.services.pdf_relatorio_assiduidade import gerar_pdf_relatorio_assiduidade
 from app.services.pdf_relatorio_estatistico import gerar_pdf_relatorio_fase_genero
+from app.services.pdf_relatorio_inscricoes import gerar_pdf_relatorio_inscricoes
 from app.services.pdf_relatorio_observacoes import gerar_pdf_relatorio_observacoes
 from app.services.pdf_relatorio_situacao_final import gerar_pdf_relatorio_situacao_final
 
 router = APIRouter(prefix="/relatorios", tags=["relatórios"])
 
 
-async def _montar_relatorio_fase_genero(
-    db: AsyncIOMotorDatabase, ano: int
-) -> RelatorioCatequisandosPorFaseGenero:
-    """A 'matrícula' de cada catequisando no ano indicado é derivada da sua
-    inscrição/renovação registada nesse ano na Caixa (categoria + fase_id +
-    ano_letivo) — a mesma fonte usada em GET /catequisandos/{id}/historico."""
-    matriculas: dict[str, str] = {}
-    async for doc in db.caixa.find({"ano_letivo": ano, "categoria": {"$in": list(CATEGORIAS_MATRICULA)}}):
-        if doc.get("catequisando_id") and doc.get("fase_id"):
-            matriculas[doc["catequisando_id"]] = doc["fase_id"]
-
-    generos: dict[str, str | None] = {}
-    if matriculas:
-        oids = [object_id_or_404(cid) for cid in matriculas]
-        async for cat in db.catequisandos.find({"_id": {"$in": oids}}):
-            generos[str(cat["_id"])] = cat.get("genero")
-
+async def _montar_relatorio_fase_genero(db: AsyncIOMotorDatabase) -> RelatorioCatequisandosPorFaseGenero:
+    """Contagem por fase e género dos catequisandos ATIVOS, pelo estado actual
+    (fase_id de cada um agora) — a mesma fonte já usada em Situação Final e
+    Assiduidade. Antes derivava-se da inscrição/renovação na Caixa, o que
+    deixava o relatório a mostrar sempre 0 sempre que essa matrícula não
+    tivesse sido lançada lá para o ano em questão."""
     fases = [doc async for doc in db.fases.find().sort("ordem", 1)]
+    ano = await obter_ano_letivo_atual(db)
 
     linhas: list[LinhaRelatorioFaseGenero] = []
     total_m = total_f = total_n = 0
     for fase in fases:
         fase_id = str(fase["_id"])
-        ids_desta_fase = [cid for cid, fid in matriculas.items() if fid == fase_id]
-        m = sum(1 for cid in ids_desta_fase if generos.get(cid) == "masculino")
-        f = sum(1 for cid in ids_desta_fase if generos.get(cid) == "feminino")
-        n = len(ids_desta_fase) - m - f
+        m = f = n = 0
+        async for cat in db.catequisandos.find({"fase_id": fase_id, "situacao": "ativo"}):
+            genero = cat.get("genero")
+            if genero == "masculino":
+                m += 1
+            elif genero == "feminino":
+                f += 1
+            else:
+                n += 1
         linhas.append(LinhaRelatorioFaseGenero(
             fase_id=fase_id, fase_nome=fase["nome"], ordem=fase["ordem"],
-            masculino=m, feminino=f, nao_informado=n, total=len(ids_desta_fase),
+            masculino=m, feminino=f, nao_informado=n, total=m + f + n,
         ))
         total_m += m
         total_f += f
@@ -72,27 +71,23 @@ async def _montar_relatorio_fase_genero(
 
 @router.get("/catequisandos-por-fase-genero", response_model=RelatorioCatequisandosPorFaseGenero)
 async def relatorio_fase_genero(
-    ano_letivo: int | None = Query(None),
     db: AsyncIOMotorDatabase = Depends(get_database),
     _: CatequistaOut = Depends(get_current_admin),
 ):
-    ano = ano_letivo or await obter_ano_letivo_atual(db)
-    return await _montar_relatorio_fase_genero(db, ano)
+    return await _montar_relatorio_fase_genero(db)
 
 
 @router.get("/catequisandos-por-fase-genero/pdf")
 async def relatorio_fase_genero_pdf(
-    ano_letivo: int | None = Query(None),
     db: AsyncIOMotorDatabase = Depends(get_database),
     _: CatequistaOut = Depends(get_current_admin),
 ):
-    ano = ano_letivo or await obter_ano_letivo_atual(db)
-    relatorio = await _montar_relatorio_fase_genero(db, ano)
+    relatorio = await _montar_relatorio_fase_genero(db)
     pdf_bytes = gerar_pdf_relatorio_fase_genero(relatorio)
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="relatorio_fase_genero_{ano}.pdf"'},
+        headers={"Content-Disposition": f'inline; filename="relatorio_fase_genero_{relatorio.ano_letivo}.pdf"'},
     )
 
 
@@ -211,6 +206,93 @@ async def relatorio_assiduidade_pdf(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="relatorio_assiduidade_{ano}.pdf"'},
+    )
+
+
+async def _montar_relatorio_inscricoes(db: AsyncIOMotorDatabase, ano: int) -> RelatorioInscricoes:
+    """Por fase: quantos catequisandos ativos tem agora, e quantos já têm
+    inscrição ou renovação lançada na Caixa para o ano indicado — a
+    diferença são os pendentes (quem ainda não pagou/renovou)."""
+    fases = [doc async for doc in db.fases.find().sort("ordem", 1)]
+    ano_atual = await obter_ano_letivo_atual(db)
+
+    transacoes_por_fase: dict[str, list[dict]] = {}
+    async for doc in db.caixa.find({"ano_letivo": ano, "categoria": {"$in": list(CATEGORIAS_MATRICULA)}}):
+        fid = doc.get("fase_id")
+        if fid:
+            transacoes_por_fase.setdefault(fid, []).append(doc)
+
+    linhas: list[LinhaRelatorioInscricoes] = []
+    tot_cat = tot_insc = tot_renov = tot_pend = 0
+    tot_valor = 0.0
+    for fase in fases:
+        fase_id = str(fase["_id"])
+        if ano < ano_atual:
+            # Ano fechado: quem fez parte da fase nesse ano (a fase actual de
+            # cada um já pode ser outra, por causa da transição).
+            total_catequisandos = len(await cids_da_fase_no_ano(db, fase_id, ano))
+        else:
+            total_catequisandos = await db.catequisandos.count_documents({"fase_id": fase_id, "situacao": "ativo"})
+        transacoes = transacoes_por_fase.get(fase_id, [])
+        inscricoes = sum(1 for t in transacoes if t["categoria"] == CATEGORIA_INSCRICAO)
+        renovacoes = sum(1 for t in transacoes if t["categoria"] == CATEGORIA_RENOVACAO)
+        total_registado = inscricoes + renovacoes
+        valor_total = sum(t["valor"] for t in transacoes)
+        pendentes = max(total_catequisandos - total_registado, 0)
+
+        linhas.append(LinhaRelatorioInscricoes(
+            fase_id=fase_id, fase_nome=fase["nome"], ordem=fase["ordem"],
+            total_catequisandos=total_catequisandos, inscricoes=inscricoes, renovacoes=renovacoes,
+            total_registado=total_registado, pendentes=pendentes, valor_total=round(valor_total, 2),
+        ))
+        tot_cat += total_catequisandos
+        tot_insc += inscricoes
+        tot_renov += renovacoes
+        tot_valor += valor_total
+        tot_pend += pendentes
+
+    return RelatorioInscricoes(
+        ano_letivo=ano, linhas=linhas,
+        total_catequisandos=tot_cat, total_inscricoes=tot_insc, total_renovacoes=tot_renov,
+        total_registado=tot_insc + tot_renov, total_pendentes=tot_pend, valor_total=round(tot_valor, 2),
+    )
+
+
+@router.get("/inscricoes/pendentes", response_model=list[MatriculaPendente])
+async def inscricoes_pendentes(
+    ano_letivo: int | None = Query(None),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    _: CatequistaOut = Depends(get_current_admin),
+):
+    """Quem ainda não tem Inscrição/Renovação lançada no ano (por defeito, o
+    corrente) — a lista de nomes por trás da coluna 'Pendentes'."""
+    ano = ano_letivo or await obter_ano_letivo_atual(db)
+    return await listar_matriculas_pendentes(db, ano)
+
+
+@router.get("/inscricoes", response_model=RelatorioInscricoes)
+async def relatorio_inscricoes(
+    ano_letivo: int | None = Query(None),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    _: CatequistaOut = Depends(get_current_admin),
+):
+    ano = ano_letivo or await obter_ano_letivo_atual(db)
+    return await _montar_relatorio_inscricoes(db, ano)
+
+
+@router.get("/inscricoes/pdf")
+async def relatorio_inscricoes_pdf(
+    ano_letivo: int | None = Query(None),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    _: CatequistaOut = Depends(get_current_admin),
+):
+    ano = ano_letivo or await obter_ano_letivo_atual(db)
+    relatorio = await _montar_relatorio_inscricoes(db, ano)
+    pdf_bytes = gerar_pdf_relatorio_inscricoes(relatorio)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="relatorio_inscricoes_{ano}.pdf"'},
     )
 
 

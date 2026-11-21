@@ -462,6 +462,26 @@ async def atualizar_catequisando(
         # Qualquer catequista pode editar (e mudar de fase) qualquer
         # catequisando — só confirma que a fase de destino existe.
         await _fase_nome_ou_erro(db, update_doc["fase_id"])
+
+    # Fase transitória (ex: Sacramento do Baptismo): ao registar a data de
+    # baptismo, o catequisando segue logo para a 'Fase seguinte' da fase.
+    # Só quando a fase não está a ser mudada à mão neste mesmo pedido (o
+    # formulário da ficha envia sempre o fase_id, igual ao actual se ninguém
+    # o mexeu — isso conta como "não mudada").
+    moveu_por_baptismo: str | None = None
+    if (
+        update_doc.get("baptismo_data") is not None
+        and update_doc.get("fase_id", doc_atual["fase_id"]) == doc_atual["fase_id"]
+        and doc_atual.get("baptismo_data") is None
+        and (doc_atual.get("situacao") or SituacaoCatequisando.ATIVO.value) == SituacaoCatequisando.ATIVO.value
+    ):
+        fase_atual_doc = await db.fases.find_one({"_id": object_id_or_404(doc_atual["fase_id"])})
+        seguinte_id = fase_atual_doc.get("fase_seguinte_id") if fase_atual_doc else None
+        if fase_atual_doc and fase_atual_doc.get("transitoria") and seguinte_id:
+            seguinte_doc = await db.fases.find_one({"_id": object_id_or_404(seguinte_id)})
+            if seguinte_doc is not None:
+                update_doc["fase_id"] = seguinte_id
+                moveu_por_baptismo = f"'{fase_atual_doc['nome']}' → '{seguinte_doc['nome']}'"
     if "sector_id" in update_doc and update_doc["sector_id"]:
         await _sector_nome_ou_erro(db, update_doc["sector_id"])
     if "nucleo_id" in update_doc and update_doc["nucleo_id"]:
@@ -488,7 +508,10 @@ async def atualizar_catequisando(
         sector = await db.sectores.find_one({"_id": object_id_or_404(doc["sector_id"])})
         sector_nome = sector["nome"] if sector else None
 
-    await registar(db, catequista, AcaoAuditoria.ATUALIZAR, "Catequisando", catequisando_id, f"Editou catequisando '{doc['nome']}'")
+    detalhe = f"Editou catequisando '{doc['nome']}'"
+    if moveu_por_baptismo:
+        detalhe += f" — baptismo registado, mudou de fase: {moveu_por_baptismo}"
+    await registar(db, catequista, AcaoAuditoria.ATUALIZAR, "Catequisando", catequisando_id, detalhe)
 
     return await _to_out(db, doc, fase["nome"] if fase else "Fase desconhecida", sector_nome)
 

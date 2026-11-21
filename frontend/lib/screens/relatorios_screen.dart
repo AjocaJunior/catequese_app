@@ -7,7 +7,7 @@ import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/relatorio_service.dart';
 
-enum _TipoRelatorio { faseGenero, situacaoFinal, assiduidade, observacoes }
+enum _TipoRelatorio { faseGenero, situacaoFinal, assiduidade, inscricoes, observacoes }
 
 class RelatoriosScreen extends StatefulWidget {
   const RelatoriosScreen({super.key});
@@ -25,6 +25,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
   RelatorioCatequisandosPorFaseGenero? _relFaseGenero;
   RelatorioSituacaoFinal? _relSituacaoFinal;
   RelatorioAssiduidade? _relAssiduidade;
+  RelatorioInscricoes? _relInscricoes;
   RelatorioObservacoes? _relObservacoes;
 
   bool _loading = true;
@@ -65,13 +66,16 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     try {
       switch (_tipo) {
         case _TipoRelatorio.faseGenero:
-          _relFaseGenero = await _service.catequisandosPorFaseGenero(anoLetivo: _anoSelecionado);
+          _relFaseGenero = await _service.catequisandosPorFaseGenero();
           break;
         case _TipoRelatorio.situacaoFinal:
           _relSituacaoFinal = await _service.situacaoFinal(anoLetivo: _anoSelecionado);
           break;
         case _TipoRelatorio.assiduidade:
           _relAssiduidade = await _service.assiduidade(anoLetivo: _anoSelecionado);
+          break;
+        case _TipoRelatorio.inscricoes:
+          _relInscricoes = await _service.inscricoes(anoLetivo: _anoSelecionado);
           break;
         case _TipoRelatorio.observacoes:
           _relObservacoes = await _service.observacoes();
@@ -91,9 +95,10 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     setState(() => _imprimindo = true);
     try {
       final bytes = switch (_tipo) {
-        _TipoRelatorio.faseGenero => await _service.catequisandosPorFaseGeneroPdf(anoLetivo: _anoSelecionado),
+        _TipoRelatorio.faseGenero => await _service.catequisandosPorFaseGeneroPdf(),
         _TipoRelatorio.situacaoFinal => await _service.situacaoFinalPdf(anoLetivo: _anoSelecionado),
         _TipoRelatorio.assiduidade => await _service.assiduidadePdf(anoLetivo: _anoSelecionado),
+        _TipoRelatorio.inscricoes => await _service.inscricoesPdf(anoLetivo: _anoSelecionado),
         _TipoRelatorio.observacoes => await _service.observacoesPdf(),
       };
       await Printing.layoutPdf(onLayout: (_) async => bytes);
@@ -174,7 +179,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     switch (_tipo) {
       case _TipoRelatorio.faseGenero:
         final r = _relFaseGenero;
-        if (r == null || r.linhas.isEmpty) return const Center(child: Text('Sem dados para este ano letivo.'));
+        if (r == null || r.linhas.isEmpty) return const Center(child: Text('Não há catequisandos ativos registados.'));
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           children: [
@@ -238,6 +243,39 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                         '${l.totalFaltas}',
                         '${l.totalFaltasJustificadas}',
                         '${l.taxaAssiduidade.toStringAsFixed(1)}%',
+                      ])
+                  .toList(),
+              flexes: const [3, 1, 1, 1, 1, 1],
+            ),
+            const SizedBox(height: 24),
+          ],
+        );
+      case _TipoRelatorio.inscricoes:
+        final r = _relInscricoes;
+        if (r == null || r.linhas.isEmpty) return const Center(child: Text('Sem dados para este ano letivo.'));
+        return ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          children: [
+            Row(
+              children: [
+                _chipTotal('Registadas', '${r.totalRegistado}', Colors.green),
+                const SizedBox(width: 8),
+                _chipTotal('Pendentes', '${r.totalPendentes}', Colors.red),
+                const SizedBox(width: 8),
+                _chipTotal('Cobrado', '${r.valorTotal.toStringAsFixed(0)} MT', Colors.teal),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _tabela(
+              ['FASE', 'Cat.', 'Insc.', 'Renov.', 'Pend.', 'Valor (MT)'],
+              r.linhas
+                  .map((l) => [
+                        l.faseNome,
+                        '${l.totalCatequisandos}',
+                        '${l.inscricoes}',
+                        '${l.renovacoes}',
+                        '${l.pendentes}',
+                        l.valorTotal.toStringAsFixed(0),
                       ])
                   .toList(),
               flexes: const [3, 1, 1, 1, 1, 1],
@@ -321,6 +359,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                     DropdownMenuItem(value: _TipoRelatorio.faseGenero, child: Text('Catequisandos por Fase e Género')),
                     DropdownMenuItem(value: _TipoRelatorio.situacaoFinal, child: Text('Situação Final por Fase')),
                     DropdownMenuItem(value: _TipoRelatorio.assiduidade, child: Text('Assiduidade Geral')),
+                    DropdownMenuItem(value: _TipoRelatorio.inscricoes, child: Text('Inscrições e Renovações por Fase')),
                     DropdownMenuItem(value: _TipoRelatorio.observacoes, child: Text('Observações Pendentes')),
                   ],
                   onChanged: (v) {
@@ -330,7 +369,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                   },
                 ),
               ),
-              if (_tipo != _TipoRelatorio.observacoes)
+              if (_tipo != _TipoRelatorio.observacoes && _tipo != _TipoRelatorio.faseGenero)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: DropdownButtonFormField<int>(

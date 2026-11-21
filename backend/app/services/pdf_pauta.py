@@ -21,6 +21,15 @@ _ROTULO_SITUACAO = {
     "permanece": "Permanece",
     "progride": "Progride",
 }
+_ROTULO_GENERO = {
+    "masculino": "M",
+    "feminino": "F",
+}
+_ROTULO_COMPORTAMENTO = {
+    "razoavel": "R",
+    "bom": "B",
+    "excelente": "E",
+}
 
 
 def gerar_pdf_pauta(pauta: PautaOut) -> bytes:
@@ -56,12 +65,12 @@ def gerar_pdf_pauta(pauta: PautaOut) -> bytes:
         return Paragraph(texto, estilo)
 
     dados_tabela = [[
-        _c("Nº", estilo_cabecalho),
+        _c("Ord.", estilo_cabecalho),
         _c("NOME", estilo_cabecalho_esq),
-        _c("PRESENÇAS", estilo_cabecalho),
-        _c("FALTAS", estilo_cabecalho),
-        _c("FALTAS JUST.", estilo_cabecalho),
-        _c("SITUAÇÃO", estilo_cabecalho),
+        _c("GÉN.", estilo_cabecalho),
+        _c("COMP.", estilo_cabecalho),
+        _c("OBSERVAÇÃO", estilo_cabecalho_esq),
+        _c("RESULTADO", estilo_cabecalho),
     ]]
 
     for i, item in enumerate(pauta.itens, start=1):
@@ -69,12 +78,16 @@ def gerar_pdf_pauta(pauta: PautaOut) -> bytes:
             item.situacao.value if item.situacao else None, "Por definir"
         )
         estilo_situacao = estilo_celula_negrito if item.situacao else estilo_celula
+        genero_texto = _ROTULO_GENERO.get(item.genero, "—")
+        comportamento_texto = _ROTULO_COMPORTAMENTO.get(
+            item.comportamento.value if item.comportamento else None, "—"
+        )
         dados_tabela.append([
             _c(str(i)),
             _c(item.catequisando_nome, estilo_celula_esq),
-            _c(str(item.total_presencas)),
-            _c(str(item.total_faltas)),
-            _c(str(item.total_faltas_justificadas)),
+            _c(genero_texto),
+            _c(comportamento_texto),
+            _c(item.observacao or "—", estilo_celula_esq),
             _c(situacao_texto, estilo_situacao),
         ])
 
@@ -84,13 +97,17 @@ def gerar_pdf_pauta(pauta: PautaOut) -> bytes:
         ])
 
     largura_util = doc.width
-    col_num = 0.9 * cm
-    col_nome = (largura_util - col_num) * 0.36
-    col_resto = (largura_util - col_num - col_nome) / 4
+    col_ord = 1.1 * cm
+    col_genero = 1.4 * cm
+    col_comp = 1.6 * cm
+    col_resultado = 2.6 * cm
+    col_restante = largura_util - col_ord - col_genero - col_comp - col_resultado
+    col_nome = col_restante * 0.42
+    col_observacao = col_restante - col_nome
 
     tabela = Table(
         dados_tabela,
-        colWidths=[col_num, col_nome, col_resto, col_resto, col_resto, col_resto],
+        colWidths=[col_ord, col_nome, col_genero, col_comp, col_observacao, col_resultado],
         repeatRows=1,
     )
     estilo_tabela = [
@@ -106,6 +123,16 @@ def gerar_pdf_pauta(pauta: PautaOut) -> bytes:
             estilo_tabela.append(("BACKGROUND", (0, i), (-1, i), COR_LINHA_ALTERNADA))
     tabela.setStyle(TableStyle(estilo_tabela))
     elementos.append(tabela)
+
+    estilo_legenda = ParagraphStyle(
+        "legenda_pauta", fontName="Helvetica", fontSize=8, textColor=colors.HexColor("#555555"),
+        alignment=TA_LEFT, spaceBefore=8,
+    )
+    elementos.append(Paragraph(
+        "<b>Legenda</b> — Género: M- Masculino, F- Feminino. "
+        "Comportamento: R- Razoável, B- Bom, E- Excelente.",
+        estilo_legenda,
+    ))
 
     elementos += bloco_assinatura(e, cargo="Catequista da Fase")
 

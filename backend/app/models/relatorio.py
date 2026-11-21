@@ -56,6 +56,29 @@ class RelatorioAssiduidade(BaseModel):
     taxa_geral: float
 
 
+class LinhaRelatorioInscricoes(BaseModel):
+    fase_id: str
+    fase_nome: str
+    ordem: int
+    total_catequisandos: int
+    inscricoes: int
+    renovacoes: int
+    total_registado: int
+    pendentes: int
+    valor_total: float
+
+
+class RelatorioInscricoes(BaseModel):
+    ano_letivo: int
+    linhas: list[LinhaRelatorioInscricoes]
+    total_catequisandos: int
+    total_inscricoes: int
+    total_renovacoes: int
+    total_registado: int
+    total_pendentes: int
+    valor_total: float
+
+
 class LinhaObservacao(BaseModel):
     numero: int
     catequisando_id: str

@@ -19,6 +19,8 @@ class FaseService {
     String? hora,
     String? local,
     String? programaPdfUrl,
+    String? faseSeguinteId,
+    bool transitoria = false,
   }) async {
     final data = await _client.post('/fases', {
       'nome': nome,
@@ -28,6 +30,8 @@ class FaseService {
       if (hora != null) 'hora': hora,
       if (local != null) 'local': local,
       if (programaPdfUrl != null) 'programa_pdf_url': programaPdfUrl,
+      if (faseSeguinteId != null) 'fase_seguinte_id': faseSeguinteId,
+      'transitoria': transitoria,
     });
     return Fase.fromJson(data as Map<String, dynamic>);
   }
@@ -41,6 +45,12 @@ class FaseService {
     String? hora,
     String? local,
     String? programaPdfUrl,
+    String? faseSeguinteId,
+
+    /// Para poder LIMPAR a fase seguinte, enviar null só é entendido como
+    /// "limpar" quando este flag está ligado.
+    bool definirFaseSeguinte = false,
+    bool? transitoria,
   }) async {
     final body = <String, dynamic>{};
     if (nome != null) body['nome'] = nome;
@@ -50,6 +60,8 @@ class FaseService {
     if (hora != null) body['hora'] = hora;
     if (local != null) body['local'] = local;
     if (programaPdfUrl != null) body['programa_pdf_url'] = programaPdfUrl;
+    if (definirFaseSeguinte) body['fase_seguinte_id'] = faseSeguinteId;
+    if (transitoria != null) body['transitoria'] = transitoria;
     final data = await _client.put('/fases/$id', body);
     return Fase.fromJson(data as Map<String, dynamic>);
   }

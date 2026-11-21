@@ -21,6 +21,12 @@ class Fase {
   final String? hora;
   final String? local;
   final String? programaPdfUrl;
+  final String? faseSeguinteId;
+  final String? faseSeguinteNome;
+
+  /// Fase de passagem (ex: Sacramento do Baptismo): sai-se dela ao registar
+  /// a data de baptismo.
+  final bool transitoria;
   final List<CatequistaResumo> catequistas;
 
   Fase({
@@ -32,6 +38,9 @@ class Fase {
     this.hora,
     this.local,
     this.programaPdfUrl,
+    this.faseSeguinteId,
+    this.faseSeguinteNome,
+    this.transitoria = false,
     this.catequistas = const [],
   });
 
@@ -44,6 +53,9 @@ class Fase {
         hora: json['hora'] as String?,
         local: json['local'] as String?,
         programaPdfUrl: json['programa_pdf_url'] as String?,
+        faseSeguinteId: json['fase_seguinte_id'] as String?,
+        faseSeguinteNome: json['fase_seguinte_nome'] as String?,
+        transitoria: json['transitoria'] as bool? ?? false,
         catequistas: (json['catequistas'] as List? ?? [])
             .map((e) => CatequistaResumo.fromJson(e as Map<String, dynamic>))
             .toList(),

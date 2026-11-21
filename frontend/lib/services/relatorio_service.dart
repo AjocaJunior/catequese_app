@@ -7,15 +7,14 @@ class RelatorioService {
   final ApiClient _client;
   RelatorioService(String? token) : _client = ApiClient(token);
 
-  Future<RelatorioCatequisandosPorFaseGenero> catequisandosPorFaseGenero({int? anoLetivo}) async {
-    final query = anoLetivo != null ? '?ano_letivo=$anoLetivo' : '';
-    final data = await _client.get('/relatorios/catequisandos-por-fase-genero$query') as Map<String, dynamic>;
+  /// Não depende do ano letivo — é sempre a fase actual de cada catequisando.
+  Future<RelatorioCatequisandosPorFaseGenero> catequisandosPorFaseGenero() async {
+    final data = await _client.get('/relatorios/catequisandos-por-fase-genero') as Map<String, dynamic>;
     return RelatorioCatequisandosPorFaseGenero.fromJson(data);
   }
 
-  Future<Uint8List> catequisandosPorFaseGeneroPdf({int? anoLetivo}) {
-    final query = anoLetivo != null ? '?ano_letivo=$anoLetivo' : '';
-    return _client.getBytes('/relatorios/catequisandos-por-fase-genero/pdf$query');
+  Future<Uint8List> catequisandosPorFaseGeneroPdf() {
+    return _client.getBytes('/relatorios/catequisandos-por-fase-genero/pdf');
   }
 
   Future<List<int>> anosDisponiveis() async {
@@ -45,6 +44,17 @@ class RelatorioService {
     return _client.getBytes('/relatorios/assiduidade/pdf$query');
   }
 
+  Future<RelatorioInscricoes> inscricoes({int? anoLetivo}) async {
+    final query = anoLetivo != null ? '?ano_letivo=$anoLetivo' : '';
+    final data = await _client.get('/relatorios/inscricoes$query') as Map<String, dynamic>;
+    return RelatorioInscricoes.fromJson(data);
+  }
+
+  Future<Uint8List> inscricoesPdf({int? anoLetivo}) {
+    final query = anoLetivo != null ? '?ano_letivo=$anoLetivo' : '';
+    return _client.getBytes('/relatorios/inscricoes/pdf$query');
+  }
+
   /// Não depende do ano letivo — é sempre o estado atual das observações.
   Future<RelatorioObservacoes> observacoes() async {
     final data = await _client.get('/relatorios/observacoes') as Map<String, dynamic>;
@@ -52,4 +62,11 @@ class RelatorioService {
   }
 
   Future<Uint8List> observacoesPdf() => _client.getBytes('/relatorios/observacoes/pdf');
+
+  /// Quem ainda não tem Inscrição/Renovação lançada no ano (por defeito, o corrente).
+  Future<List<MatriculaPendente>> inscricoesPendentes({int? anoLetivo}) async {
+    final query = anoLetivo != null ? '?ano_letivo=$anoLetivo' : '';
+    final data = await _client.get('/relatorios/inscricoes/pendentes$query') as List;
+    return data.map((e) => MatriculaPendente.fromJson(e as Map<String, dynamic>)).toList();
+  }
 }

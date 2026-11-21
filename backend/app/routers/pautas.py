@@ -40,7 +40,14 @@ async def definir_pauta(
     fase = await garantir_acesso_fase(db, fase_id, catequista)
     ano = ano_letivo or await obter_ano_letivo_atual(db)
 
-    situacoes = {item.catequisando_id: item.situacao.value for item in dados.situacoes}
+    situacoes = {
+        item.catequisando_id: {
+            "situacao": item.situacao.value if item.situacao else None,
+            "comportamento": item.comportamento.value if item.comportamento else None,
+            "observacao": (item.observacao or "").strip() or None,
+        }
+        for item in dados.situacoes
+    }
 
     await db.pautas.update_one(
         {"fase_id": fase_id, "ano_letivo": ano},
@@ -56,7 +63,7 @@ async def definir_pauta(
 
     await registar(
         db, catequista, AcaoAuditoria.ATUALIZAR, "Pauta", fase_id,
-        f"Definiu a pauta de '{fase['nome']}' para o ano {ano} ({len(situacoes)} situação(ões) preenchida(s))",
+        f"Definiu a pauta de '{fase['nome']}' para o ano {ano} ({len(situacoes)} entrada(s) preenchida(s))",
     )
 
     return await montar_pauta(db, fase, ano)
